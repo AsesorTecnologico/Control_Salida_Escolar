@@ -75,7 +75,7 @@
       <div class="mt-6 pt-5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
         <span id="sheetSyncIndicator" class="inline-flex items-center gap-1.5 font-medium">
           <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-          Sincronizando 193 perfiles...
+          Sincronizando sistema...
         </span>
         <span class="font-semibold text-slate-500">48 Sedes • 193 Cuentas</span>
       </div>
@@ -97,7 +97,7 @@
         </div>
       </div>
       <p class="text-xs text-slate-600 leading-relaxed mb-5">
-        Por seguridad institucional, debe reemplazar su clave temporal por una contraseña personal definitiva antes de acceder al panel. El cambio se actualizará en <strong class="text-slate-800">Perfiles_Acceso</strong>.
+        Por seguridad institucional, debe reemplazar su clave temporal por una contraseña personal definitiva antes de acceder al panel.
       </p>
       <form id="forcePasswordForm" class="space-y-4">
         <div>
@@ -132,24 +132,16 @@
               <span class="font-extrabold text-sm sm:text-base tracking-tight">AulaSalida Smart</span>
               <span id="headerRoleBadge" class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-blue-500/20 text-blue-300 border border-blue-400/30">Perfil</span>
               <span id="headerNivelesBadge" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">Niveles</span>
-              <span id="headerWebAppBadge" class="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> WebApp Activo
-              </span>
             </div>
             <p id="headerSedeLabel" class="text-[11px] text-slate-400 truncate max-w-[240px] sm:max-w-lg">Sede Institucional</p>
           </div>
         </div>
 
         <div class="flex items-center gap-2 sm:gap-3">
-          <a href="https://docs.google.com/spreadsheets/d/1J4cZu3AJS0SrXTFDPc1i75Y3bWVwp3x1SKRURxgLQg0/edit" target="_blank" rel="noopener"
-            class="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs font-semibold text-emerald-300 transition">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-            Abrir Google Sheet
-          </a>
-          <button id="syncNowBtn" type="button" title="Sincronizar con Google Sheets"
+          <button id="syncNowBtn" type="button" title="Sincronizar estado interno"
             class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition">
             <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-            <span class="hidden sm:inline">Sincronizar Sheets</span>
+            <span class="hidden sm:inline">Sincronizar</span>
           </button>
           <div class="hidden md:block text-right">
             <p id="headerUserName" class="text-xs font-bold text-white leading-tight">Usuario</p>
@@ -172,21 +164,21 @@
   </div>
 
   <!-- =====================================================================
-       MODAL: REGISTRO DE LLEGADA EN PUERTA / CONFIRMACIÓN DE SALIDA
+       MODAL PASO 1 (POLICÍA): NOTIFICAR LLEGADA DE FAMILIAR AL TUTOR
   ====================================================================== -->
-  <div id="gatePickupModal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+  <div id="policeNotifyModal" class="hidden fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-md w-full p-7 shadow-2xl border border-slate-200 fade-in">
       <div class="flex items-center justify-between mb-3">
-        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Control de Puerta y Salida</span>
-        <button type="button" onclick="closeModal('gatePickupModal')" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Paso 1 de 3 • Notificar al Tutor</span>
+        <button type="button" onclick="closeModal('policeNotifyModal')" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
       </div>
-      <h3 class="text-lg font-extrabold text-slate-900" id="pickupStudentName">Estudiante</h3>
-      <p class="text-xs text-slate-500 mb-4" id="pickupStudentMeta">Sede • Aula</p>
+      <h3 class="text-lg font-extrabold text-slate-900" id="notifyStudentName">Estudiante</h3>
+      <p class="text-xs text-slate-500 mb-4" id="notifyStudentMeta">Sede • Aula • Tutor</p>
 
-      <form id="gatePickupForm" class="space-y-3.5">
+      <form id="policeNotifyForm" class="space-y-3.5">
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Parentesco / Quién Recoge</label>
-          <select id="pickupRelation" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
+          <label class="block text-xs font-bold text-slate-700 mb-1">Parentesco / Quién Llegó a Recoger</label>
+          <select id="notifyRelation" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
             <option value="Madre">Madre</option>
             <option value="Padre">Padre</option>
             <option value="Apoderado(a) Autorizado(a)">Apoderado(a) Autorizado(a)</option>
@@ -196,15 +188,15 @@
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1">Nombre Completo de Quien Recoge</label>
-          <input id="pickupPersonName" type="text" required class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs" />
+          <input id="notifyPersonName" type="text" required placeholder="Ej. María Huamán Quispe" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs" />
         </div>
         <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">DNI del Familiar / Responsable</label>
-          <input id="pickupPersonDni" type="text" required maxlength="12" placeholder="8 dígitos" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+          <label class="block text-xs font-bold text-slate-700 mb-1">DNI de Quien Recoge</label>
+          <input id="notifyPersonDni" type="text" required maxlength="12" placeholder="8 dígitos" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
         </div>
         <div class="flex gap-2 pt-2">
-          <button type="button" onclick="closeModal('gatePickupModal')" class="w-1/3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700">Cancelar</button>
-          <button type="submit" class="w-2/3 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow">Registrar en Puerta y Sincronizar</button>
+          <button type="button" onclick="closeModal('policeNotifyModal')" class="w-1/3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700">Cancelar</button>
+          <button type="submit" class="w-2/3 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow">Notificar al Tutor y Registrar</button>
         </div>
       </form>
     </div>
@@ -235,7 +227,6 @@
           <span class="text-emerald-400 font-semibold">TEMPORAL (Cambio obligatorio al ingresar)</span>
         </div>
       </div>
-      <p class="text-[11px] text-slate-500 mb-4">Entregue estas credenciales de forma privada al titular de la sede. Al iniciar sesión por primera vez el sistema le pedirá crear su contraseña definitiva.</p>
       <div class="flex gap-2">
         <button type="button" id="copyCredBtn" class="flex-1 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold">Copiar Credenciales</button>
         <button type="button" onclick="closeModal('credentialDeliveryModal')" class="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">Cerrar</button>
@@ -261,7 +252,7 @@
       <div id="resetImpactSummary" class="bg-red-50/80 border border-red-200 rounded-2xl p-4 text-xs text-slate-700 space-y-1.5 mb-4"></div>
 
       <p class="text-xs text-slate-600 mb-3">
-        Las <strong>cuentas de acceso</strong>, los <strong>permisos</strong> y la <strong>configuración de las 48 sedes</strong> se conservarán intactos. Para confirmar la eliminación de los registros de alumnos, escriba <strong class="font-mono text-red-700">ELIMINAR</strong>:
+        Para confirmar la eliminación de los registros de alumnos, escriba <strong class="font-mono text-red-700">ELIMINAR</strong>:
       </p>
       <input id="resetConfirmInput" type="text" placeholder="Escriba ELIMINAR"
         class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm font-mono uppercase mb-4 focus:outline-none focus:ring-2 focus:ring-red-600" />
@@ -303,7 +294,7 @@
       </div>
       <div class="flex justify-end gap-2.5">
         <button type="button" onclick="closeModal('excelPreviewModal')" class="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700">Cancelar</button>
-        <button type="button" id="confirmExcelImportBtn" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow">Confirmar e Importar a Google Sheets</button>
+        <button type="button" id="confirmExcelImportBtn" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow">Confirmar e Importar Alumnos</button>
       </div>
     </div>
   </div>
@@ -313,31 +304,48 @@
 
   <script>
     // =========================================================================
-    // 1. CONFIGURACIÓN DE GOOGLE SHEETS Y WEBAPP ACTIVO
+    // 1. MÓDULO INTERNO DE CONEXIÓN (OCULTO EN INTERFAZ OPERATIVA)
     // =========================================================================
-    const SHEET_ID = '1J4cZu3AJS0SrXTFDPc1i75Y3bWVwp3x1SKRURxgLQg0';
-    const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
-    const DEFAULT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbwyqqKyHX8T0AmODEl4XYqGD3Xp8jNERGA4v88iu9jcS_l7HhsjqJE7-F-VL08FYUIt9w/exec';
-    const STORAGE_KEY = 'aulasalida_smart_48_sedes_v9';
+    const INTERNAL_SYSTEM_CONFIG = Object.freeze({
+      sheetId: '1J4cZu3AJS0SrXTFDPc1i75Y3bWVwp3x1SKRURxgLQg0',
+      webappUrl: 'https://script.google.com/macros/s/AKfycbwyqqKyHX8T0AmODEl4XYqGD3Xp8jNERGA4v88iu9jcS_l7HhsjqJE7-F-VL08FYUIt9w/exec',
+      tabs: Object.freeze({
+        BITACORA: 'Bitacora_Global',
+        POLICIAS: 'Policias_48_Sedes',
+        TUTORES: 'Tutores_Asignados',
+        ALUMNOS: 'Lista_Alumnos_Sedes',
+        PERFILES: 'Perfiles_Acceso',
+        AUDITORIA: 'Historial_Auditoria'
+      })
+    });
+
+    const STORAGE_KEY = 'aulasalida_smart_flow_v10';
     const LEGACY_STORAGE_KEYS = [
+      'aulasalida_smart_48_sedes_v9',
       'aulasalida_smart_48_sedes_v8',
-      'aulasalida_smart_48_sedes_v7',
-      'aulasalida_smart_full_sheets_v6',
-      'aulasalida_smart_full_sheets_v5',
-      'aulasalida_smart_v4_state',
-      'aulasalida_smart_state'
+      'aulasalida_smart_48_sedes_v7'
     ];
 
-    const TABS = {
-      BITACORA: 'Bitacora_Global',
-      POLICIAS: 'Policias_48_Sedes',
-      TUTORES: 'Tutores_Asignados',
-      ALUMNOS: 'Lista_Alumnos_Sedes',
-      PERFILES: 'Perfiles_Acceso',
-      AUDITORIA: 'Historial_Auditoria'
-    };
+    // Estados oficiales del flujo de 3 pasos sobre alumnos registrados:
+    // 0: 'EN AULA'
+    // 1: 'NOTIFICADO EN PUERTA' (Policía notificó llegada de familiar al tutor)
+    // 2: 'SALIENDO DEL AULA' (Tutor informó que el alumno está saliendo del aula)
+    // 3: 'RETIRADO' (Policía confirmó que el alumno se retiró con quien lo recogió)
+    const FLOW_STATES = Object.freeze({
+      EN_AULA: 'EN AULA',
+      NOTIFICADO: 'NOTIFICADO EN PUERTA',
+      SALIENDO: 'SALIENDO DEL AULA',
+      RETIRADO: 'RETIRADO'
+    });
 
-    // Hash SHA-256 puro (funciona en file:// y https://)
+    function normalizeFlowState(raw) {
+      const s = String(raw || '').trim().toUpperCase();
+      if (s.includes('RETIRADO')) return FLOW_STATES.RETIRADO;
+      if (s.includes('SALIENDO') || s.includes('RETIRANDO')) return FLOW_STATES.SALIENDO;
+      if (s.includes('NOTIFICADO') || s.includes('PUERTA') || s.includes('ALERTA')) return FLOW_STATES.NOTIFICADO;
+      return FLOW_STATES.EN_AULA;
+    }
+
     function sha256(ascii) {
       function rightRotate(value, amount) { return (value >>> amount) | (value << (32 - amount)); }
       const mathPow = Math.pow, maxWord = mathPow(2, 32);
@@ -397,7 +405,6 @@
     // 2. CATÁLOGO OFICIAL DE LAS 48 SEDES (23 INICIAL Y PRIMARIA + 25 SOLO PRIMARIA)
     // =========================================================================
     const SEDES_OFICIALES = [
-      // --- 23 SEDES CON INICIAL Y PRIMARIA ---
       { code: 'S01', tab: 'S01_CAJAMARCA', shortName: 'CAJAMARCA', name: 'Sede 01 - CAJAMARCA', niveles: ['Inicial', 'Primaria'], nivelesLabel: 'Inicial y Primaria', dir: 'Mg. Elena Ríos', pol: 'SO1 PNP Marco Aguilar', tut1: 'Prof. Andrea Morales', tut2: 'Prof. Beatriz Chávez' },
       { code: 'S02', tab: 'S02_CAMPOY', shortName: 'CAMPOY', name: 'Sede 02 - CAMPOY', niveles: ['Inicial', 'Primaria'], nivelesLabel: 'Inicial y Primaria', dir: 'Dr. Javier Paredes', pol: 'SO2 PNP César Chávez', tut1: 'Prof. Carolina Pinto', tut2: 'Prof. Diana Serrano' },
       { code: 'S03', tab: 'S03_ELAGUSTINO', shortName: 'EL AGUSTINO', name: 'Sede 03 - EL AGUSTINO', niveles: ['Inicial', 'Primaria'], nivelesLabel: 'Inicial y Primaria', dir: 'Mg. Patricia Solís', pol: 'SO1 PNP Luis Huamán', tut1: 'Prof. Estefanía Roca', tut2: 'Prof. Fabiola Suárez' },
@@ -422,7 +429,6 @@
       { code: 'S22', tab: 'S22_VENTANILLA', shortName: 'VENTANILLA', name: 'Sede 22 - VENTANILLA', niveles: ['Inicial', 'Primaria'], nivelesLabel: 'Inicial y Primaria', dir: 'Mg. Héctor Llamas', pol: 'SO2 PNP Samuel Paredes', tut1: 'Prof. Pamela Esquivel', tut2: 'Prof. Raquel Solórzano' },
       { code: 'S23', tab: 'S23_VILLASOL', shortName: 'VILLA SOL', name: 'Sede 23 - VILLA SOL', niveles: ['Inicial', 'Primaria'], nivelesLabel: 'Inicial y Primaria', dir: 'Mg. Teresa Miranda', pol: 'SO1 PNP Nicolás Mejía', tut1: 'Prof. Úrsula Camacho', tut2: 'Prof. Viviana Barrientos' },
 
-      // --- 25 SEDES CON SOLO PRIMARIA ---
       { code: 'S24', tab: 'S24_AREQUIPA', shortName: 'AREQUIPA', name: 'Sede 24 - AREQUIPA', niveles: ['Primaria'], nivelesLabel: 'Solo Primaria', dir: 'Mg. Arturo Delgado', pol: 'SO1 PNP Renzo Ticona', tut1: 'Prof. Camila Villanueva', tut2: 'Prof. Alejandra Pino' },
       { code: 'S25', tab: 'S25_BARRANCO', shortName: 'BARRANCO', name: 'Sede 25 - BARRANCO', niveles: ['Primaria'], nivelesLabel: 'Solo Primaria', dir: 'Lic. Vanessa Cárdenas', pol: 'SO2 PNP Paolo Jiménez', tut1: 'Prof. Mariana Pizarro', tut2: 'Prof. Brenda Acosta' },
       { code: 'S26', tab: 'S26_BELISARIO', shortName: 'BELISARIO', name: 'Sede 26 - BELISARIO', niveles: ['Primaria'], nivelesLabel: 'Solo Primaria', dir: 'Mg. Óscar Bernales', pol: 'SO1 PNP Cristian Luján', tut1: 'Prof. Jimena Carbajal', tut2: 'Prof. Carla Medina' },
@@ -571,12 +577,12 @@
       const hasInicial = s.niveles.includes('Inicial');
       const base = hasInicial
         ? [
-            ['Sebastián Quispe Huamán', 'Inicial', 'Inicial 4 Años "A"', '13:00', 'RETIRADO', 'Madre - Apoderado(a) Quispe Huamán', '41000000', '12:59', '13:05', '✅ A tiempo (+5 min)'],
-            ['Camila Salazar Méndez', 'Primaria', '3° Primaria "A"', '14:30', 'EN AULA', '—', '—', '—', 'Pendiente', '🕒 En horario']
+            ['Sebastián Quispe Huamán', 'Inicial', 'Inicial 4 Años "A"', '13:00', FLOW_STATES.RETIRADO, 'Madre - Carmen Huamán', '41000000', '12:58', '13:02', '13:05'],
+            ['Camila Salazar Méndez', 'Primaria', '3° Primaria "A"', '14:30', FLOW_STATES.EN_AULA, '—', '—', '—', '—', '—']
           ]
         : [
-            ['Mateo Paredes Rojas', 'Primaria', '3° Primaria "A"', '14:30', 'EN AULA', '—', '—', '—', 'Pendiente', '🕒 En horario'],
-            ['Valeria Cárdenas Soto', 'Primaria', '5° Primaria "A"', '14:30', 'EN AULA', '—', '—', '—', 'Pendiente', '🕒 En horario']
+            ['Mateo Paredes Rojas', 'Primaria', '3° Primaria "A"', '14:30', FLOW_STATES.EN_AULA, '—', '—', '—', '—', '—'],
+            ['Valeria Cárdenas Soto', 'Primaria', '5° Primaria "A"', '14:30', FLOW_STATES.EN_AULA, '—', '—', '—', '—', '—']
           ];
 
       return base.map((b, i) => ({
@@ -592,9 +598,10 @@
         estado: b[4],
         quienRecogio: b[5],
         dniFamiliar: b[6],
-        horaPuerta: b[7],
-        horaSalidaTutor: b[8],
-        puntualidad: b[9],
+        horaNotificacionPolicia: b[7],
+        horaSalidaAulaTutor: b[8],
+        horaRetiroConfirmado: b[9],
+        puntualidad: b[4] === FLOW_STATES.RETIRADO ? '✅ Retirado y verificado' : '🕒 En aula',
         validacionAdmin: idx === 0 && i === 0 ? 'VALIDADO' : 'PENDIENTE',
         telefonoApoderado: `+51 98${(idx % 9) + 1} 10${idx} 20${i}`
       }));
@@ -609,7 +616,7 @@
     }
 
     // =========================================================================
-    // 3. ESTADO GLOBAL Y SINCRONIZACIÓN DE LOS 193 PERFILES
+    // 3. ESTADO GLOBAL Y NORMALIZACIÓN
     // =========================================================================
     let appState = loadState();
     let currentUser = null;
@@ -618,7 +625,7 @@
     let pendingExcelRows = [];
     let pendingResetScope = 'SEDE';
     let pendingResetSede = SEDES_ALFABETICAS[0].code;
-    let activePickupStudentCode = null;
+    let activeNotifyStudentCode = null;
 
     function syncOfficialAccountsCatalog(accountsArray) {
       const validCodes = new Set(['ADMIN', ...SEDES_OFICIALES.map(s => s.code)]);
@@ -658,7 +665,6 @@
         }
       });
 
-      // Conservar cuentas adicionales creadas dinámicamente por el Administrador General
       mapByUser.forEach(extraAcc => {
         const sInfo = getSedeInfo(extraAcc.codigoSede);
         merged.push({
@@ -680,28 +686,16 @@
       stateObj.students.forEach(st => {
         const sObj = SEDE_MAP[st.codigoSede];
         st.sedeNombre = sObj.name;
+        st.estado = normalizeFlowState(st.estado);
+        st.horaNotificacionPolicia = st.horaNotificacionPolicia || st.horaPuerta || '—';
+        st.horaSalidaAulaTutor = st.horaSalidaAulaTutor || '—';
+        st.horaRetiroConfirmado = st.horaRetiroConfirmado || st.horaSalidaTutor || '—';
         if (!sObj.niveles.includes('Inicial') && st.nivel === 'Inicial') {
           st.nivel = 'Primaria';
           st.salidaOficial = '14:30';
         }
       });
 
-      SEDES_OFICIALES.forEach((s, idx) => {
-        if (!stateObj.students.some(st => st.codigoSede === s.code) && idx >= 23) {
-          stateObj.students.push(...buildDefaultStudentsForSede(s, idx));
-        }
-      });
-
-      if (!stateObj.webappUrl || !stateObj.webappUrl.startsWith('https://script.google.com/')) {
-        stateObj.webappUrl = DEFAULT_WEBAPP_URL;
-      }
-      if (!stateObj.tabsStatus) {
-        stateObj.tabsStatus = {
-          Lista_Alumnos_Sedes: 'Conectada',
-          Bitacora_Global: 'Conectada',
-          Perfiles_Acceso: `Sincronizada (${stateObj.accounts.length} cuentas)`
-        };
-      }
       if (!Array.isArray(stateObj.bitacora)) stateObj.bitacora = [];
       if (!Array.isArray(stateObj.auditLogs)) stateObj.auditLogs = [];
       return stateObj;
@@ -732,37 +726,30 @@
             id: 'AUD-001',
             fecha: new Date().toLocaleString('es-PE'),
             usuario: 'admin.general',
-            accion: 'CONFIGURACIÓN DE 48 SEDES Y 193 PERFILES',
-            alcance: '23 Sedes (Inicial y Primaria) + 25 Sedes (Solo Primaria)',
-            detalle: `Conectado al libro ${SHEET_ID} y al WebApp oficial de Google Apps Script.`
+            accion: 'FLUJO SECUENCIAL 3 PASOS ACTIVADO',
+            alcance: '48 Sedes Oficiales • 193 Cuentas',
+            detalle: 'Paso 1: Policía notifica al tutor • Paso 2: Tutor informa salida del aula • Paso 3: Policía confirma retiro.'
           }
         ],
-        webappUrl: DEFAULT_WEBAPP_URL,
-        lastSync: null,
-        tabsStatus: {
-          Lista_Alumnos_Sedes: 'Pendiente',
-          Bitacora_Global: 'Pendiente',
-          Perfiles_Acceso: '193 Cuentas Sincronizadas'
-        }
+        lastSync: null
       };
       saveState(initial);
       return initial;
     }
 
     function saveState(stateObj = appState) {
-      if (!stateObj.webappUrl) stateObj.webappUrl = DEFAULT_WEBAPP_URL;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateObj));
     }
 
     // =========================================================================
-    // 4. CONEXIÓN BIDIRECCIONAL CON GOOGLE SHEETS + WEBAPP APPS SCRIPT
+    // 4. SINCRONIZACIÓN INTERNA CON GOOGLE SHEETS / WEBAPP (SIN UI EXPUESTA)
     // =========================================================================
     async function fetchSheetTab(tabName) {
-      const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
+      const url = `https://docs.google.com/spreadsheets/d/${INTERNAL_SYSTEM_CONFIG.sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
       const res = await fetch(url, { cache: 'no-store' });
       const text = await res.text();
       const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
-      if (!match) throw new Error(`No se pudo leer la pestaña ${tabName}`);
+      if (!match) throw new Error(`No se pudo leer ${tabName}`);
       const json = JSON.parse(match[1]);
       if (json.status === 'error') throw new Error(json.errors?.[0]?.message || `Error en ${tabName}`);
       return (json.table && json.table.rows) || [];
@@ -776,11 +763,8 @@
 
     async function syncAllFromGoogleSheets(silent = true) {
       const indicator = document.getElementById('sheetSyncIndicator');
-      let loadedTabs = 0;
-
-      // 1. Leer Lista_Alumnos_Sedes
       try {
-        const rows = await fetchSheetTab(TABS.ALUMNOS);
+        const rows = await fetchSheetTab(INTERNAL_SYSTEM_CONFIG.tabs.ALUMNOS);
         const parsedStudents = [];
         rows.forEach((r) => {
           const codigoSede = cellVal(r, 0);
@@ -789,6 +773,7 @@
           const sObj = SEDE_MAP[codigoSede];
           const rawNivel = cellVal(r, 4);
           const nivel = sObj.niveles.includes(rawNivel) ? rawNivel : 'Primaria';
+          const estado = normalizeFlowState(cellVal(r, 9));
           parsedStudents.push({
             codigoSede,
             sedeNombre: sObj.name,
@@ -799,30 +784,26 @@
             tutor: cellVal(r, 6),
             policia: cellVal(r, 7),
             salidaOficial: cellVal(r, 8) || (nivel === 'Inicial' ? '13:00' : '14:30'),
-            estado: cellVal(r, 9) || 'EN AULA',
+            estado,
             quienRecogio: cellVal(r, 10) || '—',
             dniFamiliar: cellVal(r, 11) || '—',
-            horaPuerta: cellVal(r, 12) || '—',
-            horaSalidaTutor: cellVal(r, 13) || 'Pendiente',
-            puntualidad: cellVal(r, 14) || '🕒 En horario',
-            validacionAdmin: cellVal(r, 15) || 'PENDIENTE',
-            telefonoApoderado: cellVal(r, 16) || ''
+            horaNotificacionPolicia: cellVal(r, 12) || '—',
+            horaSalidaAulaTutor: cellVal(r, 13) || '—',
+            horaRetiroConfirmado: cellVal(r, 14) || '—',
+            puntualidad: cellVal(r, 15) || (estado === FLOW_STATES.RETIRADO ? '✅ Retirado y verificado' : '🕒 En proceso'),
+            validacionAdmin: cellVal(r, 16) || 'PENDIENTE',
+            telefonoApoderado: cellVal(r, 17) || ''
           });
         });
         if (parsedStudents.length > 0) {
           const sheetCodes = new Set(parsedStudents.map(s => s.codigoAlumno));
-          const localOnly = appState.students.filter(s => !sheetCodes.has(s.codigoAlumno) && Number(s.codigoSede.replace('S', '')) > 23);
+          const localOnly = appState.students.filter(s => !sheetCodes.has(s.codigoAlumno));
           appState.students = [...parsedStudents, ...localOnly];
         }
-        appState.tabsStatus.Lista_Alumnos_Sedes = `Conectada (${appState.students.length} filas)`;
-        loadedTabs++;
-      } catch (e) {
-        appState.tabsStatus.Lista_Alumnos_Sedes = 'Respaldo Local Activo';
-      }
+      } catch (e) {}
 
-      // 2. Leer Bitacora_Global
       try {
-        const rows = await fetchSheetTab(TABS.BITACORA);
+        const rows = await fetchSheetTab(INTERNAL_SYSTEM_CONFIG.tabs.BITACORA);
         const parsedBitacora = [];
         rows.forEach((r) => {
           const nReg = cellVal(r, 0);
@@ -851,19 +832,12 @@
         if (parsedBitacora.length > 0) {
           appState.bitacora = parsedBitacora;
         }
-        appState.tabsStatus.Bitacora_Global = `Conectada (${appState.bitacora.length} eventos)`;
-        loadedTabs++;
-      } catch (e) {
-        appState.tabsStatus.Bitacora_Global = 'Respaldo Local Activo';
-      }
+      } catch (e) {}
 
-      // 3. Leer y fusionar Perfiles_Acceso sin perder ninguna de las 193 cuentas
       try {
-        const rows = await fetchSheetTab(TABS.PERFILES);
-        let countProfiles = 0;
+        const rows = await fetchSheetTab(INTERNAL_SYSTEM_CONFIG.tabs.PERFILES);
         const candidateAccounts = [...appState.accounts];
-
-        rows.forEach((r) => {
+        rows.forEach((r, idx) => {
           const codigoSede = cellVal(r, 0);
           if (codigoSede !== 'ADMIN' && !SEDE_MAP[codigoSede]) return;
           const sedeInfo = getSedeInfo(codigoSede);
@@ -877,13 +851,11 @@
           const claveSheet = cellVal(r, 6);
           const estadoClave = cellVal(r, 7).toUpperCase() || 'TEMPORAL';
           const permisosStr = cellVal(r, 8);
-
           if (!usuario || usuario === 'usuario') return;
 
           const permisosPolicia = permisosStr && permisosStr !== 'N/A'
             ? permisosStr.split(',').map(p => p.trim().toLowerCase()).filter(Boolean)
             : [];
-
           const isSha = /^[a-f0-9]{64}$/i.test(claveSheet);
           const passHash = claveSheet ? (isSha ? claveSheet.toLowerCase() : sha256(claveSheet)) : null;
 
@@ -899,7 +871,7 @@
             if (permisosPolicia.length) existing.permisosPolicia = permisosPolicia;
           } else if (passHash) {
             candidateAccounts.push({
-              id: `ACC-${Date.now()}-${countProfiles}`,
+              id: `ACC-${Date.now()}-${idx}`,
               codigoSede,
               sedeNombre: sedeInfo.name,
               perfil,
@@ -911,34 +883,26 @@
               permisosPolicia
             });
           }
-          countProfiles++;
         });
-
         appState.accounts = syncOfficialAccountsCatalog(candidateAccounts);
-        appState.tabsStatus.Perfiles_Acceso = countProfiles > 0
-          ? `Conectada (${appState.accounts.length} cuentas)`
-          : `Sincronizada (${appState.accounts.length} cuentas)`;
-        loadedTabs++;
       } catch (e) {
         appState.accounts = syncOfficialAccountsCatalog(appState.accounts);
-        appState.tabsStatus.Perfiles_Acceso = `Sincronizada (${appState.accounts.length} cuentas)`;
       }
 
       appState.lastSync = new Date().toLocaleTimeString('es-PE');
       saveState();
 
       if (indicator) {
-        indicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ${appState.accounts.length} Perfiles Sincronizados`;
+        indicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Sistema Activo (${appState.accounts.length} perfiles)`;
       }
-
       if (!silent) {
         if (currentUser) renderActiveTab();
-        showToast(`Sincronización completada (${appState.accounts.length} perfiles listos para ingresar).`);
+        showToast('Estado del sistema sincronizado.');
       }
     }
 
     async function pushToGoogleSheets(action, payload) {
-      const targetUrl = appState.webappUrl || DEFAULT_WEBAPP_URL;
+      const targetUrl = INTERNAL_SYSTEM_CONFIG.webappUrl;
       if (!targetUrl) return;
       try {
         await fetch(targetUrl, {
@@ -946,7 +910,7 @@
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify({
-            sheetId: SHEET_ID,
+            sheetId: INTERNAL_SYSTEM_CONFIG.sheetId,
             action,
             tipo: action,
             payload,
@@ -954,12 +918,159 @@
             timestamp: new Date().toISOString()
           })
         });
-        setTimeout(() => syncAllFromGoogleSheets(true), 1800);
       } catch (e) {}
     }
 
     // =========================================================================
-    // 5. AUTENTICACIÓN Y CAMBIO OBLIGATORIO DE CONTRASEÑA TEMPORAL
+    // 5. REGISTRO CENTRALIZADO DE PROCESOS DEL FLUJO DE 3 PASOS
+    // =========================================================================
+    function appendProcessLog(student, accion, extra = {}) {
+      const now = new Date();
+      const fecha = now.toISOString().slice(0, 10);
+      const hora = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const entry = {
+        num: appState.bitacora.length + 1,
+        fecha,
+        hora,
+        codigoSede: student.codigoSede,
+        sedeNombre: student.sedeNombre,
+        nivel: student.nivel,
+        aula: student.aula,
+        tutor: student.tutor,
+        policia: student.policia,
+        codigoAlumno: student.codigoAlumno,
+        estudiante: student.estudiante,
+        accion,
+        quienRecogio: student.quienRecogio || '—',
+        dniFamiliar: student.dniFamiliar || '—',
+        horaPuerta: student.horaNotificacionPolicia || '—',
+        horaSalidaTutor: student.horaSalidaAulaTutor || '—',
+        horaRetiro: student.horaRetiroConfirmado || '—',
+        ejecutor: currentUser ? currentUser.usuario : 'sistema',
+        ...extra
+      };
+      appState.bitacora.unshift(entry);
+      return entry;
+    }
+
+    // PASO 1 (POLICÍA): Notificar al tutor llegada del familiar para alumno registrado
+    function openPoliceNotifyModal(codigoAlumno) {
+      if (!currentUser || currentUser.perfil !== 'Policía') return;
+      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno && s.codigoSede === currentUser.codigoSede);
+      if (!st) {
+        showToast('Solo se pueden procesar alumnos registrados en esta sede.');
+        return;
+      }
+      if (st.estado !== FLOW_STATES.EN_AULA) {
+        showToast('Este paso ya fue registrado y está bloqueado en esta vista.');
+        return;
+      }
+      activeNotifyStudentCode = codigoAlumno;
+      document.getElementById('notifyStudentName').textContent = `${st.estudiante} (${st.codigoAlumno})`;
+      document.getElementById('notifyStudentMeta').textContent = `${st.sedeNombre} • ${st.nivel} • ${st.aula} • Tutor: ${st.tutor}`;
+      document.getElementById('notifyPersonName').value = '';
+      document.getElementById('notifyPersonDni').value = st.dniFamiliar && st.dniFamiliar !== '—' ? st.dniFamiliar : '';
+      document.getElementById('policeNotifyModal').classList.remove('hidden');
+    }
+
+    document.getElementById('policeNotifyForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!currentUser || currentUser.perfil !== 'Policía') return;
+      const st = appState.students.find(s => s.codigoAlumno === activeNotifyStudentCode && s.codigoSede === currentUser.codigoSede);
+      if (!st || st.estado !== FLOW_STATES.EN_AULA) return;
+
+      const rel = document.getElementById('notifyRelation').value;
+      const person = document.getElementById('notifyPersonName').value.trim();
+      const dni = document.getElementById('notifyPersonDni').value.trim();
+      const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      st.estado = FLOW_STATES.NOTIFICADO;
+      st.quienRecogio = `${rel} - ${person}`;
+      st.dniFamiliar = dni;
+      st.horaNotificacionPolicia = nowTime;
+      st.puntualidad = `🔔 Notificado al tutor (${nowTime})`;
+
+      const bitEntry = appendProcessLog(st, 'PASO 1: POLICÍA NOTIFICÓ LLEGADA DE FAMILIAR AL TUTOR');
+      saveState();
+
+      const sedeObj = SEDE_MAP[st.codigoSede];
+      pushToGoogleSheets('UPDATE_EXIT', {
+        student: st,
+        sedeTab: sedeObj ? sedeObj.tab : '',
+        bitacoraRow: bitEntry
+      });
+
+      closeModal('policeNotifyModal');
+      renderActiveTab();
+      showToast(`Paso 1 registrado: tutor notificado sobre ${st.estudiante}.`);
+    });
+
+    // PASO 2 (TUTOR): Informar que el alumno está saliendo/retirándose del aula
+    function tutorInformLeavingClassroom(codigoAlumno) {
+      if (!currentUser || !currentUser.perfil.startsWith('Tutor')) return;
+      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno && s.codigoSede === currentUser.codigoSede);
+      if (!st) {
+        showToast('Solo se pueden procesar alumnos registrados en esta sede.');
+        return;
+      }
+      if (st.estado !== FLOW_STATES.NOTIFICADO) {
+        showToast('Solo puede informar salida del aula cuando el policía haya notificado la llegada y el paso no esté ya registrado.');
+        return;
+      }
+
+      const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      st.estado = FLOW_STATES.SALIENDO;
+      st.horaSalidaAulaTutor = nowTime;
+      st.puntualidad = `🚶 Saliendo del aula (${nowTime})`;
+
+      const bitEntry = appendProcessLog(st, 'PASO 2: TUTOR INFORMÓ QUE ALUMNO SE RETIRA DEL AULA');
+      saveState();
+
+      const sedeObj = SEDE_MAP[st.codigoSede];
+      pushToGoogleSheets('UPDATE_EXIT', {
+        student: st,
+        sedeTab: sedeObj ? sedeObj.tab : '',
+        bitacoraRow: bitEntry
+      });
+
+      renderActiveTab();
+      showToast(`Paso 2 registrado: ${st.estudiante} informado como saliendo del aula.`);
+    }
+
+    // PASO 3 (POLICÍA): Confirmar que el alumno se retiró con quien lo recogió
+    function policeConfirmStudentLeft(codigoAlumno) {
+      if (!currentUser || currentUser.perfil !== 'Policía') return;
+      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno && s.codigoSede === currentUser.codigoSede);
+      if (!st) {
+        showToast('Solo se pueden procesar alumnos registrados en esta sede.');
+        return;
+      }
+      if (st.estado !== FLOW_STATES.SALIENDO) {
+        showToast('El tutor debe informar primero que el alumno está saliendo del aula.');
+        return;
+      }
+
+      const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      st.estado = FLOW_STATES.RETIRADO;
+      st.horaRetiroConfirmado = nowTime;
+      st.puntualidad = `✅ Retiro confirmado (${nowTime})`;
+
+      const bitEntry = appendProcessLog(st, 'PASO 3: POLICÍA CONFIRMÓ RETIRO CON FAMILIAR AUTORIZADO');
+      saveState();
+
+      const sedeObj = SEDE_MAP[st.codigoSede];
+      pushToGoogleSheets('UPDATE_EXIT', {
+        student: st,
+        sedeTab: sedeObj ? sedeObj.tab : '',
+        bitacoraRow: bitEntry
+      });
+
+      renderActiveTab();
+      showToast(`Paso 3 registrado: retiro confirmado para ${st.estudiante}.`);
+    }
+
+    // =========================================================================
+    // 6. AUTENTICACIÓN Y CAMBIO DE CONTRASEÑA TEMPORAL
     // =========================================================================
     document.getElementById('togglePassBtn').addEventListener('click', () => {
       const inp = document.getElementById('loginPass');
@@ -1051,7 +1162,7 @@
       const logged = pendingForceUser;
       pendingForceUser = null;
       document.getElementById('forcePasswordModal').classList.add('hidden');
-      showToast('Contraseña personal guardada y enviada a Google Sheets.');
+      showToast('Contraseña personal guardada.');
       enterDashboard(logged);
     });
 
@@ -1064,7 +1175,7 @@
 
       document.getElementById('headerRoleBadge').textContent = account.perfil;
       document.getElementById('headerNivelesBadge').textContent = account.codigoSede === 'ADMIN'
-        ? '23 Inicial+Primaria • 25 Solo Primaria'
+        ? '23 Ini+Pri • 25 Solo Primaria'
         : sedeInfo.nivelesLabel;
       document.getElementById('headerSedeLabel').textContent = `${sedeInfo.name} • ${account.aulaNivel}`;
       document.getElementById('headerUserName').textContent = account.nombre;
@@ -1085,7 +1196,7 @@
     document.getElementById('syncNowBtn').addEventListener('click', () => syncAllFromGoogleSheets(false));
 
     // =========================================================================
-    // 6. NAVEGACIÓN POR PERFIL
+    // 7. NAVEGACIÓN POR PERFIL (SIN OPCIÓN DE HOJA DE CÁLCULO)
     // =========================================================================
     function buildNavForRole(account) {
       const tabsEl = document.getElementById('roleNavTabs');
@@ -1097,22 +1208,21 @@
           { id: 'accounts', label: 'Perfiles y Accesos por Sede' },
           { id: 'policePerms', label: 'Permisos de Policía' },
           { id: 'resetRecords', label: 'Reiniciar Registros de Alumnos' },
-          { id: 'audit', label: 'Bitácora y Auditoría' },
-          { id: 'sheetsConfig', label: 'Conexión Google Sheets' }
+          { id: 'audit', label: 'Registro de Procesos y Auditoría' }
         ];
       } else if (account.perfil === 'Director') {
         tabs = [
           { id: 'directorSede', label: 'Supervisión de Sede y Tutores' },
-          { id: 'studentsList', label: 'Registro de Alumnos de la Sede' }
+          { id: 'studentsList', label: 'Registro de Alumnos (Solo Consulta)' }
         ];
       } else if (account.perfil.startsWith('Tutor')) {
         tabs = [
-          { id: 'tutorStudents', label: 'Control de Salida de Alumnos' },
-          { id: 'tutorImport', label: 'Importar Excel / Nuevo Alumno' }
+          { id: 'tutorStudents', label: 'Paso 2: Salida del Aula' },
+          { id: 'tutorImport', label: 'Alumnos Registrados / Importar' }
         ];
       } else if (account.perfil === 'Policía') {
         tabs = [
-          { id: 'policeGate', label: 'Control de Puerta Principal' }
+          { id: 'policeGate', label: 'Pasos 1 y 3: Puerta y Retiro' }
         ];
       }
 
@@ -1147,7 +1257,6 @@
         case 'policePerms': return renderAdminPolicePerms(container);
         case 'resetRecords': return renderAdminReset(container);
         case 'audit': return renderAdminAudit(container);
-        case 'sheetsConfig': return renderAdminSheetsConfig(container);
         case 'directorSede': return renderDirectorDashboard(container);
         case 'studentsList': return renderSedeStudentsReadOnly(container);
         case 'tutorStudents': return renderTutorDashboard(container);
@@ -1157,50 +1266,45 @@
     }
 
     // =========================================================================
-    // 7. VISTAS DEL ADMINISTRADOR GENERAL
+    // 8. VISTAS DEL ADMINISTRADOR GENERAL
     // =========================================================================
     function renderAdminOverview(container) {
       const totalStudents = appState.students.length;
-      const inGate = appState.students.filter(s => s.estado.includes('PUERTA')).length;
-      const retired = appState.students.filter(s => s.estado.includes('RETIRADO')).length;
-      const activeAccounts = appState.accounts.filter(a => a.estadoClave === 'ACTIVA').length;
+      const step1Count = appState.students.filter(s => s.estado === FLOW_STATES.NOTIFICADO).length;
+      const step2Count = appState.students.filter(s => s.estado === FLOW_STATES.SALIENDO).length;
+      const step3Count = appState.students.filter(s => s.estado === FLOW_STATES.RETIRADO).length;
 
       container.innerHTML = `
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 fade-in">
-          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <p class="text-[11px] font-bold uppercase text-slate-400">48 Sedes Oficiales</p>
-            <p class="text-2xl font-extrabold text-slate-900 mt-1">48 <span class="text-xs font-semibold text-indigo-600">(23 Ini+Pri • 25 Pri)</span></p>
-          </div>
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
             <p class="text-[11px] font-bold uppercase text-slate-400">Alumnos Registrados</p>
             <p class="text-2xl font-extrabold text-slate-900 mt-1">${totalStudents}</p>
           </div>
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <p class="text-[11px] font-bold uppercase text-amber-600">En Puerta / Retirados</p>
-            <p class="text-2xl font-extrabold text-amber-600 mt-1">${inGate} <span class="text-xs font-bold text-emerald-600">/ ${retired} ret.</span></p>
+            <p class="text-[11px] font-bold uppercase text-amber-600">Paso 1: Notificados</p>
+            <p class="text-2xl font-extrabold text-amber-600 mt-1">${step1Count}</p>
           </div>
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <p class="text-[11px] font-bold uppercase text-blue-600">Cuentas (Perfiles_Acceso)</p>
-            <p class="text-2xl font-extrabold text-blue-700 mt-1">${appState.accounts.length} <span class="text-xs font-medium text-slate-400">(${activeAccounts} activas)</span></p>
+            <p class="text-[11px] font-bold uppercase text-blue-600">Paso 2: Saliendo Aula</p>
+            <p class="text-2xl font-extrabold text-blue-700 mt-1">${step2Count}</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            <p class="text-[11px] font-bold uppercase text-emerald-600">Paso 3: Retirados</p>
+            <p class="text-2xl font-extrabold text-emerald-600 mt-1">${step3Count}</p>
           </div>
         </div>
 
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
           <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
             <div>
-              <h2 class="text-base font-extrabold text-slate-900">Consolidado Multi-Sede (48 Sedes Oficiales)</h2>
-              <p class="text-xs text-slate-500">23 sedes con Inicial y Primaria y 25 sedes con Solo Primaria.</p>
+              <h2 class="text-base font-extrabold text-slate-900">Consolidado del Flujo de 3 Pasos (48 Sedes)</h2>
+              <p class="text-xs text-slate-500">Solo el Administrador General puede revertir un registro a "EN AULA" si requiere corrección excepcional.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <button type="button" onclick="exportFullWorkbookXlsx()"
                 class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm">
-                Descargar Excel (54 Pestañas)
+                Exportar Reporte Excel
               </button>
-              <select id="adminModalidadFilter" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white">
-                <option value="ALL">Todas las Modalidades (48)</option>
-                <option value="INI_PRI">Inicial y Primaria (23 Sedes)</option>
-                <option value="SOLO_PRI">Solo Primaria (25 Sedes)</option>
-              </select>
               <select id="adminSedeFilter" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white">
                 <option value="ALL">Todas las 48 Sedes (A–Z)</option>
                 ${SEDES_ALFABETICAS.map(s => `<option value="${s.code}">${s.shortName} — [${s.nivelesLabel}]</option>`).join('')}
@@ -1212,12 +1316,11 @@
               <thead class="bg-slate-50 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                 <tr>
                   <th class="px-3.5 py-2.5">Sede</th>
-                  <th class="px-3.5 py-2.5">Modalidad</th>
-                  <th class="px-3.5 py-2.5">Código</th>
-                  <th class="px-3.5 py-2.5">Estudiante</th>
-                  <th class="px-3.5 py-2.5">Nivel / Aula</th>
-                  <th class="px-3.5 py-2.5">Quién Recogió / DNI</th>
+                  <th class="px-3.5 py-2.5">Código / Alumno</th>
+                  <th class="px-3.5 py-2.5">Quien Recoge (DNI)</th>
+                  <th class="px-3.5 py-2.5">Tiempos (P1 / P2 / P3)</th>
                   <th class="px-3.5 py-2.5">Estado</th>
+                  <th class="px-3.5 py-2.5 text-right">Control Admin</th>
                 </tr>
               </thead>
               <tbody id="adminStudentsTbody" class="divide-y divide-slate-100"></tbody>
@@ -1227,21 +1330,14 @@
       `;
 
       const renderRows = () => {
-        const modFilter = document.getElementById('adminModalidadFilter').value;
         const filterCode = document.getElementById('adminSedeFilter').value;
-        let list = appState.students;
-        if (modFilter === 'INI_PRI') {
-          list = list.filter(s => getSedeInfo(s.codigoSede).niveles.includes('Inicial'));
-        } else if (modFilter === 'SOLO_PRI') {
-          list = list.filter(s => !getSedeInfo(s.codigoSede).niveles.includes('Inicial'));
-        }
-        if (filterCode !== 'ALL') {
-          list = list.filter(s => s.codigoSede === filterCode);
-        }
+        const list = filterCode === 'ALL'
+          ? appState.students
+          : appState.students.filter(s => s.codigoSede === filterCode);
 
         const tbody = document.getElementById('adminStudentsTbody');
         if (!list.length) {
-          tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400 font-medium">No hay registros de alumnos para el filtro seleccionado.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400 font-medium">No hay registros de alumnos para el filtro seleccionado.</td></tr>`;
           return;
         }
         tbody.innerHTML = list.map(s => {
@@ -1249,20 +1345,49 @@
           return `
             <tr class="hover:bg-slate-50">
               <td class="px-3.5 py-2.5 font-semibold text-slate-700">${sInfo.shortName} <span class="text-[10px] text-slate-400">(${s.codigoSede})</span></td>
-              <td class="px-3.5 py-2.5">${renderModalidadBadge(sInfo)}</td>
-              <td class="px-3.5 py-2.5 font-mono text-slate-500">${s.codigoAlumno}</td>
-              <td class="px-3.5 py-2.5 font-bold text-slate-900">${s.estudiante}</td>
-              <td class="px-3.5 py-2.5 text-slate-600">${s.nivel} • ${s.aula}</td>
+              <td class="px-3.5 py-2.5"><span class="font-mono text-slate-400">${s.codigoAlumno}</span> • <strong class="text-slate-900">${s.estudiante}</strong><div class="text-[10px] text-slate-400">${s.nivel} • ${s.aula}</div></td>
               <td class="px-3.5 py-2.5 text-slate-600">${s.quienRecogio} <span class="font-mono text-slate-400">(${s.dniFamiliar})</span></td>
+              <td class="px-3.5 py-2.5 font-mono text-[11px] text-slate-600">${s.horaNotificacionPolicia} / ${s.horaSalidaAulaTutor} / ${s.horaRetiroConfirmado}</td>
               <td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>
+              <td class="px-3.5 py-2.5 text-right">
+                ${s.estado !== FLOW_STATES.EN_AULA
+                  ? `<button type="button" onclick="adminResetStudentCycle('${s.codigoAlumno}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-red-50 text-red-700 font-bold text-[11px]">Reiniciar Ciclo</button>`
+                  : `<span class="text-[11px] text-slate-400">En aula</span>`}
+              </td>
             </tr>
           `;
         }).join('');
       };
 
       renderRows();
-      document.getElementById('adminModalidadFilter').addEventListener('change', renderRows);
       document.getElementById('adminSedeFilter').addEventListener('change', renderRows);
+    }
+
+    function adminResetStudentCycle(codigoAlumno) {
+      if (!currentUser || currentUser.perfil !== 'Administrador General') return;
+      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno);
+      if (!st) return;
+
+      st.estado = FLOW_STATES.EN_AULA;
+      st.quienRecogio = '—';
+      st.dniFamiliar = '—';
+      st.horaNotificacionPolicia = '—';
+      st.horaSalidaAulaTutor = '—';
+      st.horaRetiroConfirmado = '—';
+      st.puntualidad = '🕒 En aula';
+
+      const bitEntry = appendProcessLog(st, 'REINICIO DE CICLO DE SALIDA POR ADMINISTRADOR');
+      saveState();
+
+      const sedeObj = SEDE_MAP[st.codigoSede];
+      pushToGoogleSheets('UPDATE_EXIT', {
+        student: st,
+        sedeTab: sedeObj ? sedeObj.tab : '',
+        bitacoraRow: bitEntry
+      });
+
+      renderActiveTab();
+      showToast(`Ciclo de ${st.estudiante} restablecido a EN AULA.`);
     }
 
     function renderAdminAccounts(container) {
@@ -1270,7 +1395,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 h-fit">
             <h2 class="text-base font-extrabold text-slate-900 mb-1">Asignar Cuenta por Sede</h2>
-            <p class="text-xs text-slate-500 mb-4">Cupos por sede: <strong>1 Director</strong>, <strong>1 Policía</strong> y <strong>1–2 Tutores</strong> (en sedes <em>Solo Primaria</em> todos los perfiles operan solo en Primaria). Cada persona pertenece a una sola sede.</p>
+            <p class="text-xs text-slate-500 mb-4">Cupos por sede: <strong>1 Director</strong>, <strong>1 Policía</strong> y <strong>1–2 Tutores</strong>.</p>
 
             <form id="createAccountForm" class="space-y-3.5">
               <div>
@@ -1309,8 +1434,8 @@
           <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
-                <h2 class="text-base font-extrabold text-slate-900">Cuentas Registradas (Perfiles_Acceso)</h2>
-                <p class="text-xs text-slate-500">Sincronizado con la pestaña <strong>Perfiles_Acceso</strong> vía WebApp (${appState.accounts.length} cuentas).</p>
+                <h2 class="text-base font-extrabold text-slate-900">Cuentas Registradas (${appState.accounts.length})</h2>
+                <p class="text-xs text-slate-500">Gestión centralizada de accesos por sede.</p>
               </div>
               <select id="filterAccSede" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
                 <option value="ALL">Todas las Sedes (${appState.accounts.length} cuentas)</option>
@@ -1343,7 +1468,7 @@
         const hasIni = sInfo.niveles.includes('Inicial');
         document.getElementById('accSedeNivelesHint').textContent = hasIni
           ? 'Modalidad: Inicial y Primaria (Permite Tutores de Inicial y Primaria).'
-          : 'Modalidad: Solo Primaria (No cuenta con nivel Inicial; todos los perfiles operan solo en Primaria).';
+          : 'Modalidad: Solo Primaria (Todos los perfiles operan solo en Primaria).';
 
         const roleSel = document.getElementById('accRoleSelect');
         roleSel.innerHTML = hasIni
@@ -1400,7 +1525,7 @@
         const code = document.getElementById('accSedeSelect').value;
         const perfil = document.getElementById('accRoleSelect').value;
         const nombre = document.getElementById('accFullName').value.trim();
-        let aulaNivel = document.getElementById('accAula').value.trim();
+        const aulaNivel = document.getElementById('accAula').value.trim();
         const usuario = document.getElementById('accUsername').value.trim().toLowerCase();
         const err = document.getElementById('accFormError');
         err.classList.add('hidden');
@@ -1411,35 +1536,16 @@
           err.classList.remove('hidden');
           return;
         }
-
         if (appState.accounts.some(a => a.usuario.toLowerCase() === usuario)) {
           err.textContent = `El usuario "${usuario}" ya existe en el sistema.`;
           err.classList.remove('hidden');
           return;
         }
-
         const samePersonOtherSede = appState.accounts.find(
           a => a.codigoSede !== 'ADMIN' && a.codigoSede !== code && a.nombre.toLowerCase() === nombre.toLowerCase()
         );
         if (samePersonOtherSede) {
-          err.textContent = `Bloqueado: "${nombre}" ya está asignado a ${samePersonOtherSede.sedeNombre}. Cada persona solo puede pertenecer a una sede.`;
-          err.classList.remove('hidden');
-          return;
-        }
-
-        const sedeAccounts = appState.accounts.filter(a => a.codigoSede === code);
-        if (perfil === 'Director' && sedeAccounts.some(a => a.perfil === 'Director')) {
-          err.textContent = 'Esta sede ya cuenta con un Director asignado.';
-          err.classList.remove('hidden');
-          return;
-        }
-        if (perfil === 'Policía' && sedeAccounts.some(a => a.perfil === 'Policía')) {
-          err.textContent = 'Esta sede ya cuenta con un Policía asignado.';
-          err.classList.remove('hidden');
-          return;
-        }
-        if (perfil.startsWith('Tutor') && sedeAccounts.filter(a => a.perfil.startsWith('Tutor')).length >= 2) {
-          err.textContent = 'Esta sede ya alcanzó el máximo de 2 Tutores.';
+          err.textContent = `Bloqueado: "${nombre}" ya está asignado a ${samePersonOtherSede.sedeNombre}.`;
           err.classList.remove('hidden');
           return;
         }
@@ -1464,12 +1570,11 @@
           fecha: new Date().toLocaleString('es-PE'),
           usuario: currentUser.usuario,
           accion: 'CREACIÓN DE CUENTA',
-          alcance: `${sedeObj.name} (${perfil} • ${sedeObj.nivelesLabel})`,
+          alcance: `${sedeObj.name} (${perfil})`,
           detalle: `Se creó el usuario ${usuario} para ${nombre}.`
         };
         appState.auditLogs.unshift(auditEntry);
         saveState();
-
         pushToGoogleSheets('UPSERT_ACCOUNT', { account: newAcc, audit: auditEntry });
 
         document.getElementById('createAccountForm').reset();
@@ -1492,7 +1597,6 @@
       const rawTemp = generateRandomTempPassword(acc.codigoSede);
       acc.passHash = sha256(rawTemp);
       acc.estadoClave = 'TEMPORAL';
-
       const auditEntry = {
         id: `AUD-${Date.now()}`,
         fecha: new Date().toLocaleString('es-PE'),
@@ -1503,7 +1607,6 @@
       };
       appState.auditLogs.unshift(auditEntry);
       saveState();
-
       pushToGoogleSheets('UPSERT_ACCOUNT', { account: acc, audit: auditEntry });
       renderActiveTab();
       openCredentialDeliveryModal(acc, rawTemp);
@@ -1525,7 +1628,7 @@
       saveState();
       pushToGoogleSheets('DELETE_ACCOUNT', { usuario: acc.usuario, audit: auditEntry });
       renderActiveTab();
-      showToast(`Cuenta ${acc.usuario} eliminada y sincronizada.`);
+      showToast(`Cuenta ${acc.usuario} eliminada.`);
     }
 
     function openCredentialDeliveryModal(acc, rawPass) {
@@ -1537,7 +1640,7 @@
       document.getElementById('credentialDeliveryModal').classList.remove('hidden');
 
       document.getElementById('copyCredBtn').onclick = () => {
-        const text = `AulaSalida Smart — Credenciales Institucionales\nSede: ${acc.sedeNombre} (${sInfo.nivelesLabel})\nPerfil: ${acc.perfil}\nTitular: ${acc.nombre}\nUsuario: ${acc.usuario}\nContraseña Temporal: ${rawPass}\n(Al ingresar por primera vez el sistema solicitará cambiar esta clave)`;
+        const text = `AulaSalida Smart — Credenciales Institucionales\nSede: ${acc.sedeNombre}\nPerfil: ${acc.perfil}\nTitular: ${acc.nombre}\nUsuario: ${acc.usuario}\nContraseña Temporal: ${rawPass}`;
         navigator.clipboard.writeText(text);
         showToast('Credenciales copiadas al portapapeles.');
       };
@@ -1553,21 +1656,20 @@
         { key: 'estado', label: 'Estado de Alumnos' },
         { key: 'familiar', label: 'Quién Recoge' },
         { key: 'dni', label: 'DNI Familiar' },
-        { key: 'puerta', label: 'Registrar Llegada' }
+        { key: 'puerta', label: 'Notificar / Confirmar' }
       ];
 
       container.innerHTML = `
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
           <div class="mb-4">
             <h2 class="text-base font-extrabold text-slate-900">Permisos de Consulta del Policía por Sede (48 Sedes)</h2>
-            <p class="text-xs text-slate-500">Habilite o restrinja la información que el Policía asignado a cada sede puede consultar y operar.</p>
+            <p class="text-xs text-slate-500">Habilite o restrinja la información visible para el Policía en cada sede.</p>
           </div>
           <div class="overflow-x-auto border border-slate-200 rounded-xl max-h-[580px]">
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                 <tr>
                   <th class="px-3.5 py-2.5">Sede</th>
-                  <th class="px-3.5 py-2.5">Modalidad</th>
                   <th class="px-3.5 py-2.5">Policía Asignado</th>
                   <th class="px-3.5 py-2.5">Usuario</th>
                   ${permCatalog.map(p => `<th class="px-3.5 py-2.5 text-center">${p.label}</th>`).join('')}
@@ -1579,7 +1681,6 @@
                   return `
                     <tr class="hover:bg-slate-50">
                       <td class="px-3.5 py-2.5 font-semibold text-slate-800">${sInfo.shortName} <span class="text-[10px] text-slate-400">(${pol.codigoSede})</span></td>
-                      <td class="px-3.5 py-2.5">${renderModalidadBadge(sInfo)}</td>
                       <td class="px-3.5 py-2.5 text-slate-700">${pol.nombre}</td>
                       <td class="px-3.5 py-2.5 font-mono text-slate-500">${pol.usuario}</td>
                       ${permCatalog.map(p => {
@@ -1610,7 +1711,7 @@
       pol.permisosPolicia = Array.from(set);
       saveState();
       pushToGoogleSheets('UPSERT_ACCOUNT', { account: pol });
-      showToast(`Permisos actualizados para ${pol.usuario} en Google Sheets.`);
+      showToast(`Permisos actualizados para ${pol.usuario}.`);
     }
 
     function renderAdminReset(container) {
@@ -1620,7 +1721,7 @@
             <div>
               <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Modalidad 1 • Por Sede</span>
               <h2 class="text-base font-extrabold text-slate-900 mt-3 mb-1">Reiniciar Registros de Alumnos por Sede</h2>
-              <p class="text-xs text-slate-500 mb-4">Elimina únicamente los registros de alumnos asociados a la sede elegida (localmente y en <strong>Lista_Alumnos_Sedes</strong> + su pestaña de sede vía WebApp). Las cuentas y permisos permanecen intactos.</p>
+              <p class="text-xs text-slate-500 mb-4">Elimina únicamente los registros de alumnos asociados a la sede elegida.</p>
               <label class="block text-xs font-bold text-slate-700 mb-1.5">Seleccione la Sede (48 Sedes Oficiales)</label>
               <select id="resetSedeSelect" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold mb-4">
                 ${SEDES_ALFABETICAS.map(s => {
@@ -1639,9 +1740,9 @@
             <div>
               <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-50 text-red-700 border border-red-200">Modalidad 2 • General (48 Sedes)</span>
               <h2 class="text-base font-extrabold text-slate-900 mt-3 mb-1">Reiniciar Registros de Forma General</h2>
-              <p class="text-xs text-slate-500 mb-4">Elimina los registros de alumnos de todas las <strong>48 sedes</strong> para comenzar un nuevo periodo escolar. Todas las cuentas, claves, permisos y sedes se conservarán sin alteraciones.</p>
+              <p class="text-xs text-slate-500 mb-4">Elimina los registros de alumnos de todas las 48 sedes conservando cuentas y permisos.</p>
               <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-700 mb-4">
-                Total actual en el sistema: <strong>${appState.students.length} registros de alumnos</strong> en las 48 sedes.
+                Total actual en el sistema: <strong>${appState.students.length} registros de alumnos</strong>.
               </div>
             </div>
             <button type="button" onclick="openResetModal('GENERAL')"
@@ -1665,15 +1766,13 @@
         const count = appState.students.filter(st => st.codigoSede === code).length;
         summary.innerHTML = `
           <p><strong>Alcance:</strong> Por Sede</p>
-          <p><strong>Sede afectada:</strong> ${sedeObj.name} (${sedeObj.nivelesLabel})</p>
-          <p><strong>Registros de alumnos que se eliminarán:</strong> <span class="text-red-700 font-extrabold">${count}</span></p>
+          <p><strong>Sede afectada:</strong> ${sedeObj.name}</p>
+          <p><strong>Registros a eliminar:</strong> <span class="text-red-700 font-extrabold">${count}</span></p>
         `;
       } else {
-        const sedesConDatos = new Set(appState.students.map(st => st.sedeNombre));
         summary.innerHTML = `
           <p><strong>Alcance:</strong> General (Todas las 48 Sedes)</p>
-          <p><strong>Sedes con registros (${sedesConDatos.size}):</strong> ${sedesConDatos.size > 0 ? Array.from(sedesConDatos).slice(0, 12).join(', ') + (sedesConDatos.size > 12 ? '...' : '') : 'Todas las 48 sedes'}</p>
-          <p><strong>Total de registros de alumnos que se eliminarán:</strong> <span class="text-red-700 font-extrabold">${appState.students.length}</span></p>
+          <p><strong>Total de registros a eliminar:</strong> <span class="text-red-700 font-extrabold">${appState.students.length}</span></p>
         `;
       }
       document.getElementById('resetConfirmModal').classList.remove('hidden');
@@ -1711,10 +1810,9 @@
         usuario: currentUser.usuario,
         accion: 'REINICIO DE REGISTROS DE ALUMNOS',
         alcance: scopeLabel,
-        detalle: `Eliminados ${deletedCount} registros de alumnos. Cuentas, permisos y configuración conservados.`
+        detalle: `Eliminados ${deletedCount} registros de alumnos.`
       };
       appState.auditLogs.unshift(auditEntry);
-
       saveState();
       pushToGoogleSheets('RESET_STUDENTS', {
         scope: pendingResetScope,
@@ -1726,16 +1824,46 @@
 
       closeModal('resetConfirmModal');
       renderActiveTab();
-      showToast(`Reinicio ejecutado (${deletedCount} registros eliminados) y enviado a Google Sheets.`);
+      showToast(`Reinicio ejecutado (${deletedCount} registros eliminados).`);
     });
 
     function renderAdminAudit(container) {
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h2 class="text-base font-extrabold text-slate-900 mb-1">Historial de Auditoría Administrativa</h2>
-            <p class="text-xs text-slate-500 mb-4">Registro de eliminaciones de alumnos, cambios de clave temporal y gestión de perfiles.</p>
+            <h2 class="text-base font-extrabold text-slate-900 mb-1">Registro Cronológico de Procesos del Flujo (3 Pasos)</h2>
+            <p class="text-xs text-slate-500 mb-4">Cada notificación del policía, aviso de salida del tutor y confirmación de retiro queda registrada.</p>
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="px-3 py-2">Fecha / Hora</th>
+                    <th class="px-3 py-2">Sede</th>
+                    <th class="px-3 py-2">Alumno</th>
+                    <th class="px-3 py-2">Proceso Registrado</th>
+                    <th class="px-3 py-2">Quien Recoge (DNI)</th>
+                    <th class="px-3 py-2">Ejecutor</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${appState.bitacora.length ? appState.bitacora.slice(0, 60).map(b => `
+                    <tr>
+                      <td class="px-3 py-2 font-mono text-slate-500">${b.fecha} ${b.hora}</td>
+                      <td class="px-3 py-2 font-semibold">${b.sedeNombre}</td>
+                      <td class="px-3 py-2 font-bold text-slate-900">${b.estudiante} <span class="font-mono text-[10px] text-slate-400">(${b.codigoAlumno})</span></td>
+                      <td class="px-3 py-2 font-bold text-blue-700">${b.accion}</td>
+                      <td class="px-3 py-2">${b.quienRecogio} (${b.dniFamiliar})</td>
+                      <td class="px-3 py-2 font-mono text-slate-500">${b.ejecutor}</td>
+                    </tr>
+                  `).join('') : `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Sin eventos del flujo registrados aún.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h2 class="text-base font-extrabold text-slate-900 mb-1">Historial de Auditoría Administrativa</h2>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl mt-3">
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
@@ -1760,104 +1888,12 @@
               </table>
             </div>
           </div>
-
-          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h2 class="text-base font-extrabold text-slate-900 mb-1">Bitácora Global de Salidas (Bitacora_Global)</h2>
-            <p class="text-xs text-slate-500 mb-4">Eventos operativos de llegada a puerta y retiros confirmados sincronizados con Google Sheets.</p>
-            <div class="overflow-x-auto border border-slate-200 rounded-xl">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                  <tr>
-                    <th class="px-3 py-2">Fecha / Hora</th>
-                    <th class="px-3 py-2">Sede</th>
-                    <th class="px-3 py-2">Alumno</th>
-                    <th class="px-3 py-2">Acción</th>
-                    <th class="px-3 py-2">Quién Recogió (DNI)</th>
-                    <th class="px-3 py-2">Ejecutor</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                  ${appState.bitacora.length ? appState.bitacora.slice(0, 40).map(b => `
-                    <tr>
-                      <td class="px-3 py-2 font-mono text-slate-500">${b.fecha} ${b.hora}</td>
-                      <td class="px-3 py-2 font-semibold">${b.sedeNombre}</td>
-                      <td class="px-3 py-2 font-bold text-slate-900">${b.estudiante}</td>
-                      <td class="px-3 py-2 font-semibold text-emerald-700">${b.accion}</td>
-                      <td class="px-3 py-2">${b.quienRecogio} (${b.dniFamiliar})</td>
-                      <td class="px-3 py-2 font-mono text-slate-500">${b.ejecutor}</td>
-                    </tr>
-                  `).join('') : `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Sin eventos nuevos registrados aún.</td></tr>`}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       `;
-    }
-
-    function renderAdminSheetsConfig(container) {
-      const activeUrl = appState.webappUrl || DEFAULT_WEBAPP_URL;
-
-      container.innerHTML = `
-        <div class="space-y-6 fade-in">
-          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h2 class="text-base font-extrabold text-slate-900">Conexión Bidireccional con Google Sheets y WebApp</h2>
-                <p class="text-xs text-slate-500">Libro vinculado: <a href="${SHEET_URL}" target="_blank" class="text-blue-700 underline font-semibold">AulaSalida Smart — Gestión Multi-Sede</a></p>
-              </div>
-              <div class="flex items-center gap-2">
-                <button type="button" onclick="syncAllFromGoogleSheets(false)" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
-                  Sincronizar Ahora
-                </button>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <span class="text-[10px] font-bold uppercase text-slate-400">Lista_Alumnos_Sedes</span>
-                <p class="font-bold text-slate-800 mt-0.5">${appState.tabsStatus.Lista_Alumnos_Sedes}</p>
-              </div>
-              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <span class="text-[10px] font-bold uppercase text-slate-400">Bitacora_Global</span>
-                <p class="font-bold text-slate-800 mt-0.5">${appState.tabsStatus.Bitacora_Global}</p>
-              </div>
-              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <span class="text-[10px] font-bold uppercase text-slate-400">Perfiles_Acceso</span>
-                <p class="font-bold text-slate-800 mt-0.5">${appState.tabsStatus.Perfiles_Acceso}</p>
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">URL del WebApp Google Apps Script (Activa por defecto)</label>
-              <div class="flex flex-col sm:flex-row gap-2">
-                <input id="webappUrlInput" type="url" value="${activeUrl}"
-                  class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-700" />
-                <button type="button" id="saveWebappBtn" class="px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold">Guardar URL</button>
-                <button type="button" id="restoreDefaultWebappBtn" class="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold">Restaurar Oficial</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
-      document.getElementById('saveWebappBtn').addEventListener('click', () => {
-        const val = document.getElementById('webappUrlInput').value.trim();
-        appState.webappUrl = val || DEFAULT_WEBAPP_URL;
-        saveState();
-        showToast('URL de WebApp actualizada.');
-      });
-
-      document.getElementById('restoreDefaultWebappBtn').addEventListener('click', () => {
-        appState.webappUrl = DEFAULT_WEBAPP_URL;
-        document.getElementById('webappUrlInput').value = DEFAULT_WEBAPP_URL;
-        saveState();
-        showToast('URL oficial del WebApp restaurada.');
-      });
     }
 
     // =========================================================================
-    // 8. VISTAS DE DIRECTOR, TUTOR Y POLICÍA (FILTRADAS POR SU SEDE Y NIVELES)
+    // 9. VISTAS DE DIRECTOR, TUTOR Y POLICÍA (BLOQUEO DE RE-EDICIÓN OPERATIVA)
     // =========================================================================
     function renderDirectorDashboard(container) {
       const sedeCode = currentUser.codigoSede;
@@ -1874,28 +1910,26 @@
               <p class="text-[11px] text-slate-500 mt-0.5">${sedeStudents.length} alumnos registrados</p>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <p class="text-[11px] font-bold uppercase text-blue-600">Tutores de la Sede</p>
-              <p class="text-2xl font-extrabold text-blue-700 mt-1">${tutors.length}</p>
+              <p class="text-[11px] font-bold uppercase text-amber-600">Notificados / Saliendo</p>
+              <p class="text-2xl font-extrabold text-amber-600 mt-1">${sedeStudents.filter(s => s.estado === FLOW_STATES.NOTIFICADO || s.estado === FLOW_STATES.SALIENDO).length}</p>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <p class="text-[11px] font-bold uppercase text-emerald-600">Retiros Confirmados</p>
-              <p class="text-2xl font-extrabold text-emerald-600 mt-1">${sedeStudents.filter(s => s.estado.includes('RETIRADO')).length}</p>
+              <p class="text-2xl font-extrabold text-emerald-600 mt-1">${sedeStudents.filter(s => s.estado === FLOW_STATES.RETIRADO).length}</p>
             </div>
           </div>
 
           <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h2 class="text-base font-extrabold text-slate-900 mb-3">Supervisión del Equipo de Tutores (${sInfo.nivelesLabel})</h2>
+            <h2 class="text-base font-extrabold text-slate-900 mb-3">Equipo de Tutores (${sInfo.nivelesLabel})</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               ${tutors.map(t => `
                 <div class="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between">
                   <div>
                     <span class="text-[10px] font-bold uppercase text-blue-700">${t.perfil}</span>
                     <p class="text-sm font-bold text-slate-900">${t.nombre}</p>
-                    <p class="text-xs text-slate-500">${t.aulaNivel} • Usuario: <span class="font-mono">${t.usuario}</span></p>
+                    <p class="text-xs text-slate-500">${t.aulaNivel} • <span class="font-mono">${t.usuario}</span></p>
                   </div>
-                  <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${t.estadoClave === 'ACTIVA' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                    ${t.estadoClave}
-                  </span>
+                  <span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${t.estadoClave === 'ACTIVA' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">${t.estadoClave}</span>
                 </div>
               `).join('')}
             </div>
@@ -1910,7 +1944,10 @@
       container.innerHTML = `
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
           <div class="flex items-center justify-between mb-4">
-            <h2 class="text-base font-extrabold text-slate-900">Registros de Alumnos — ${sInfo.name}</h2>
+            <div>
+              <h2 class="text-base font-extrabold text-slate-900">Registro de Alumnos — ${sInfo.name}</h2>
+              <p class="text-xs text-slate-500">Vista de consulta: los registros del flujo no se editan desde esta vista.</p>
+            </div>
             ${renderModalidadBadge(sInfo)}
           </div>
           <div class="overflow-x-auto border border-slate-200 rounded-xl">
@@ -1920,8 +1957,8 @@
                   <th class="px-3.5 py-2.5">Código</th>
                   <th class="px-3.5 py-2.5">Estudiante</th>
                   <th class="px-3.5 py-2.5">Nivel / Aula</th>
-                  <th class="px-3.5 py-2.5">Quién Recogió / DNI</th>
-                  <th class="px-3.5 py-2.5">Hora Puerta / Salida</th>
+                  <th class="px-3.5 py-2.5">Quien Recoge (DNI)</th>
+                  <th class="px-3.5 py-2.5">Tiempos (P1 / P2 / P3)</th>
                   <th class="px-3.5 py-2.5">Estado</th>
                 </tr>
               </thead>
@@ -1932,7 +1969,7 @@
                     <td class="px-3.5 py-2.5 font-bold text-slate-900">${s.estudiante}</td>
                     <td class="px-3.5 py-2.5 text-slate-600">${s.nivel} • ${s.aula}</td>
                     <td class="px-3.5 py-2.5 text-slate-600">${s.quienRecogio} (${s.dniFamiliar})</td>
-                    <td class="px-3.5 py-2.5 font-mono text-slate-600">${s.horaPuerta} / ${s.horaSalidaTutor}</td>
+                    <td class="px-3.5 py-2.5 font-mono text-[11px] text-slate-600">${s.horaNotificacionPolicia} / ${s.horaSalidaAulaTutor} / ${s.horaRetiroConfirmado}</td>
                     <td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>
                   </tr>
                 `).join('') : `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay alumnos registrados en esta sede.</td></tr>`}
@@ -1943,6 +1980,8 @@
       `;
     }
 
+    // TUTOR (PASO 2): Solo informa que el alumno registrado está saliendo del aula cuando fue NOTIFICADO EN PUERTA.
+    // Una vez registrado (SALIENDO DEL AULA o RETIRADO), queda bloqueado para edición en la vista del Tutor.
     function renderTutorDashboard(container) {
       const sInfo = getSedeInfo(currentUser.codigoSede);
       const list = appState.students.filter(s => s.codigoSede === currentUser.codigoSede);
@@ -1950,8 +1989,8 @@
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <div>
-              <h2 class="text-base font-extrabold text-slate-900">Control de Salida — ${sInfo.name}</h2>
-              <p class="text-xs text-slate-500">Modalidad autorizada: <strong>${sInfo.nivelesLabel}</strong>. Cada movimiento se sincroniza en tiempo real con Google Sheets.</p>
+              <h2 class="text-base font-extrabold text-slate-900">Paso 2 • Informar Salida del Aula — ${sInfo.name}</h2>
+              <p class="text-xs text-slate-500">Solo puede informar salida de alumnos registrados que ya fueron <strong>notificados en puerta</strong> por el policía. Una vez registrado, queda bloqueado en esta vista.</p>
             </div>
             ${renderModalidadBadge(sInfo)}
           </div>
@@ -1959,137 +1998,42 @@
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <tr>
-                  <th class="px-3.5 py-2.5">Código</th>
-                  <th class="px-3.5 py-2.5">Estudiante</th>
-                  <th class="px-3.5 py-2.5">Nivel / Aula / Salida</th>
-                  <th class="px-3.5 py-2.5">Quién Recogió / DNI</th>
+                  <th class="px-3.5 py-2.5">Código / Estudiante</th>
+                  <th class="px-3.5 py-2.5">Nivel / Aula</th>
+                  <th class="px-3.5 py-2.5">Familiar Notificado (DNI)</th>
+                  <th class="px-3.5 py-2.5">Hora Notificación</th>
                   <th class="px-3.5 py-2.5">Estado</th>
-                  <th class="px-3.5 py-2.5 text-right">Acciones</th>
+                  <th class="px-3.5 py-2.5 text-right">Acción (Paso 2)</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                ${list.length ? list.map(s => `
-                  <tr class="hover:bg-slate-50">
-                    <td class="px-3.5 py-2.5 font-mono text-slate-500">${s.codigoAlumno}</td>
-                    <td class="px-3.5 py-2.5 font-bold text-slate-900">${s.estudiante}<div class="text-[10px] text-slate-400">${s.telefonoApoderado}</div></td>
-                    <td class="px-3.5 py-2.5 text-slate-600"><strong>${s.nivel}</strong> • ${s.aula} <span class="font-mono text-slate-400">(${s.salidaOficial})</span></td>
-                    <td class="px-3.5 py-2.5 text-slate-600">${s.quienRecogio} <span class="font-mono text-slate-400">(${s.dniFamiliar})</span></td>
-                    <td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>
-                    <td class="px-3.5 py-2.5 text-right space-x-1">
-                      <button type="button" onclick="openGatePickupModal('${s.codigoAlumno}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px]">Llegada Puerta</button>
-                      <button type="button" onclick="confirmTutorExit('${s.codigoAlumno}')" class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]">Confirmar Salida</button>
-                    </td>
-                  </tr>
-                `).join('') : `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay alumnos registrados en esta sede. Use "Importar Excel / Nuevo Alumno".</td></tr>`}
+                ${list.length ? list.map(s => {
+                  const canInformLeaving = s.estado === FLOW_STATES.NOTIFICADO;
+                  let actionCell = '';
+                  if (canInformLeaving) {
+                    actionCell = `<button type="button" onclick="tutorInformLeavingClassroom('${s.codigoAlumno}')" class="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-[11px] shadow-sm">Informar Salida de Aula</button>`;
+                  } else if (s.estado === FLOW_STATES.EN_AULA) {
+                    actionCell = `<span class="text-[11px] text-slate-400 font-medium">Esperando aviso de policía</span>`;
+                  } else {
+                    actionCell = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-bold text-[11px]" title="Registrado y bloqueado en vista de Tutor">🔒 Registrado (${s.horaSalidaAulaTutor})</span>`;
+                  }
+
+                  return `
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-3.5 py-2.5"><span class="font-mono text-slate-400">${s.codigoAlumno}</span> • <strong class="text-slate-900">${s.estudiante}</strong></td>
+                      <td class="px-3.5 py-2.5 text-slate-600">${s.nivel} • ${s.aula}</td>
+                      <td class="px-3.5 py-2.5 text-slate-700">${s.quienRecogio} <span class="font-mono text-slate-400">(${s.dniFamiliar})</span></td>
+                      <td class="px-3.5 py-2.5 font-mono text-slate-600">${s.horaNotificacionPolicia}</td>
+                      <td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>
+                      <td class="px-3.5 py-2.5 text-right">${actionCell}</td>
+                    </tr>
+                  `;
+                }).join('') : `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay alumnos registrados en esta sede.</td></tr>`}
               </tbody>
             </table>
           </div>
         </div>
       `;
-    }
-
-    function openGatePickupModal(codigoAlumno) {
-      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno);
-      if (!st) return;
-      activePickupStudentCode = codigoAlumno;
-      document.getElementById('pickupStudentName').textContent = st.estudiante;
-      document.getElementById('pickupStudentMeta').textContent = `${st.sedeNombre} • ${st.nivel} • ${st.aula}`;
-      document.getElementById('pickupPersonName').value = st.quienRecogio !== '—' ? st.quienRecogio.replace(/^.*-\s*/, '') : '';
-      document.getElementById('pickupPersonDni').value = st.dniFamiliar !== '—' ? st.dniFamiliar : '';
-      document.getElementById('gatePickupModal').classList.remove('hidden');
-    }
-
-    document.getElementById('gatePickupForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const st = appState.students.find(s => s.codigoAlumno === activePickupStudentCode);
-      if (!st) return;
-
-      const rel = document.getElementById('pickupRelation').value;
-      const person = document.getElementById('pickupPersonName').value.trim();
-      const dni = document.getElementById('pickupPersonDni').value.trim();
-      const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-      st.estado = 'EN PUERTA / ALERTA';
-      st.quienRecogio = `${rel} - ${person}`;
-      st.dniFamiliar = dni;
-      st.horaPuerta = nowTime;
-
-      const bitEntry = {
-        num: appState.bitacora.length + 1,
-        fecha: new Date().toISOString().slice(0, 10),
-        hora: nowTime,
-        codigoSede: st.codigoSede,
-        sedeNombre: st.sedeNombre,
-        nivel: st.nivel,
-        aula: st.aula,
-        tutor: st.tutor,
-        policia: st.policia,
-        codigoAlumno: st.codigoAlumno,
-        estudiante: st.estudiante,
-        accion: 'LLEGADA DE FAMILIAR EN PUERTA',
-        quienRecogio: st.quienRecogio,
-        dniFamiliar: dni,
-        horaPuerta: nowTime,
-        horaSalidaTutor: st.horaSalidaTutor,
-        ejecutor: currentUser.usuario
-      };
-      appState.bitacora.unshift(bitEntry);
-      saveState();
-
-      const sedeObj = SEDE_MAP[st.codigoSede];
-      pushToGoogleSheets('UPDATE_EXIT', {
-        student: st,
-        sedeTab: sedeObj ? sedeObj.tab : '',
-        bitacoraRow: bitEntry
-      });
-
-      closeModal('gatePickupModal');
-      renderActiveTab();
-      showToast(`Llegada en puerta registrada para ${st.estudiante} y enviada al Google Sheet.`);
-    });
-
-    function confirmTutorExit(codigoAlumno) {
-      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno);
-      if (!st) return;
-      const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-      st.estado = 'RETIRADO';
-      if (st.horaPuerta === '—') st.horaPuerta = nowTime;
-      st.horaSalidaTutor = nowTime;
-      st.puntualidad = `✅ Confirmado (${nowTime})`;
-      if (st.quienRecogio === '—') st.quienRecogio = 'Apoderado(a) Autorizado(a)';
-
-      const bitEntry = {
-        num: appState.bitacora.length + 1,
-        fecha: new Date().toISOString().slice(0, 10),
-        hora: nowTime,
-        codigoSede: st.codigoSede,
-        sedeNombre: st.sedeNombre,
-        nivel: st.nivel,
-        aula: st.aula,
-        tutor: st.tutor,
-        policia: st.policia,
-        codigoAlumno: st.codigoAlumno,
-        estudiante: st.estudiante,
-        accion: 'SALIDA CONFIRMADA POR TUTOR',
-        quienRecogio: st.quienRecogio,
-        dniFamiliar: st.dniFamiliar,
-        horaPuerta: st.horaPuerta,
-        horaSalidaTutor: nowTime,
-        ejecutor: currentUser.usuario
-      };
-      appState.bitacora.unshift(bitEntry);
-      saveState();
-
-      const sedeObj = SEDE_MAP[st.codigoSede];
-      pushToGoogleSheets('UPDATE_EXIT', {
-        student: st,
-        sedeTab: sedeObj ? sedeObj.tab : '',
-        bitacoraRow: bitEntry
-      });
-
-      renderActiveTab();
-      showToast(`Salida confirmada para ${st.estudiante} y sincronizada con Bitacora_Global.`);
     }
 
     function renderTutorImport(container) {
@@ -2103,10 +2047,10 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <div class="flex items-center justify-between mb-1">
-              <h2 class="text-base font-extrabold text-slate-900">Registrar Alumno Individual</h2>
+              <h2 class="text-base font-extrabold text-slate-900">Registrar Alumno en el Sistema</h2>
               ${renderModalidadBadge(sInfo)}
             </div>
-            <p class="text-xs text-slate-500 mb-4">Se sincronizará con <strong>${sInfo.name}</strong> y <strong>Lista_Alumnos_Sedes</strong>.</p>
+            <p class="text-xs text-slate-500 mb-4">Solo los alumnos registrados pueden ingresar al flujo de salida.</p>
             <form id="singleStudentForm" class="space-y-3.5">
               <div>
                 <label class="block text-xs font-bold text-slate-700 mb-1">Nombre Completo del Estudiante</label>
@@ -2114,7 +2058,7 @@
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1">Nivel Educativo Autorizado</label>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Nivel Educativo</label>
                   <select id="stuNivel" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
                     ${levelOptions}
                   </select>
@@ -2134,7 +2078,7 @@
                   <input id="stuCel" type="text" required placeholder="+51 987 654 321" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
                 </div>
               </div>
-              <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow">Registrar y Sincronizar</button>
+              <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow">Registrar Alumno</button>
             </form>
           </div>
 
@@ -2142,8 +2086,7 @@
             <div>
               <h2 class="text-base font-extrabold text-slate-900 mb-1">Importar Lista desde Excel (.xlsx / .xls)</h2>
               <p class="text-xs text-slate-500 mb-4">
-                Detecta automáticamente encabezados escolares e infiere el aula desde el nombre del archivo.
-                ${hasInicial ? 'Esta sede admite <strong>Inicial y Primaria</strong>.' : 'Esta sede es <strong>Solo Primaria</strong>, por lo que todos los alumnos importados se asignarán automáticamente a <strong>Primaria (14:30)</strong>.'}
+                Registra masivamente alumnos para <strong>${sInfo.name}</strong> (${sInfo.nivelesLabel}).
               </p>
               <label class="flex flex-col items-center justify-center border-2 border-dashed border-blue-300 bg-blue-50/50 hover:bg-blue-50 rounded-2xl p-8 cursor-pointer transition">
                 <svg class="w-9 h-9 text-blue-600 mb-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
@@ -2171,22 +2114,24 @@
           nivel,
           aula: document.getElementById('stuAula').value.trim(),
           tutor: currentUser.nombre,
-          policia: sedeObj ? sedeObj.pol : 'Policía Asignado',
+          policia: sedeObj.pol,
           salidaOficial: nivel === 'Inicial' ? '13:00' : '14:30',
-          estado: 'EN AULA',
+          estado: FLOW_STATES.EN_AULA,
           quienRecogio: '—',
           dniFamiliar: document.getElementById('stuDniFam').value.trim(),
-          horaPuerta: '—',
-          horaSalidaTutor: 'Pendiente',
-          puntualidad: '🕒 En horario',
+          horaNotificacionPolicia: '—',
+          horaSalidaAulaTutor: '—',
+          horaRetiroConfirmado: '—',
+          puntualidad: '🕒 En aula',
           validacionAdmin: 'PENDIENTE',
           telefonoApoderado: document.getElementById('stuCel').value.trim()
         };
         appState.students.push(newStudent);
+        appendProcessLog(newStudent, 'ALUMNO REGISTRADO EN SISTEMA');
         saveState();
-        pushToGoogleSheets('ADD_STUDENTS', { students: [newStudent], sedeTab: sedeObj ? sedeObj.tab : '' });
+        pushToGoogleSheets('ADD_STUDENTS', { students: [newStudent], sedeTab: sedeObj.tab });
         document.getElementById('singleStudentForm').reset();
-        showToast('Estudiante registrado y enviado a Google Sheets.');
+        showToast('Alumno registrado en el sistema.');
       });
 
       document.getElementById('excelFileInput').addEventListener('change', handleSmartExcelUpload);
@@ -2198,7 +2143,6 @@
       const code = currentUser.codigoSede;
       const sedeObj = SEDE_MAP[code];
       const hasInicial = sedeObj.niveles.includes('Inicial');
-
       const inferredAula = file.name.replace(/\.(xlsx|xls|csv)$/i, '').replace(/[_-]+/g, ' ').trim();
       const inferredNivel = (hasInicial && /INICIAL|3\s*AÑOS|4\s*AÑOS|5\s*AÑOS/i.test(inferredAula)) ? 'Inicial' : 'Primaria';
 
@@ -2219,7 +2163,6 @@
 
         const headers = (matrix[headerRowIdx] || []).map(h => String(h).trim().toUpperCase());
         const findCol = (regex) => headers.findIndex(h => regex.test(h));
-
         const idxFull = findCol(/APELLIDOS?\s*Y\s*NOMBRES?|ESTUDIANTE|ALUMNO/);
         const idxLast = findCol(/^APELLIDOS?$/);
         const idxFirst = findCol(/^NOMBRES?$/);
@@ -2233,17 +2176,13 @@
         for (let r = headerRowIdx + 1; r < matrix.length; r++) {
           const row = matrix[r];
           if (!row || !row.length) continue;
-
           let estudiante = '';
-          if (idxFull >= 0 && row[idxFull]) {
-            estudiante = String(row[idxFull]).trim();
-          } else if (idxLast >= 0 || idxFirst >= 0) {
-            estudiante = `${idxLast >= 0 ? row[idxLast] : ''} ${idxFirst >= 0 ? row[idxFirst] : ''}`.trim();
-          } else {
+          if (idxFull >= 0 && row[idxFull]) estudiante = String(row[idxFull]).trim();
+          else if (idxLast >= 0 || idxFirst >= 0) estudiante = `${idxLast >= 0 ? row[idxLast] : ''} ${idxFirst >= 0 ? row[idxFirst] : ''}`.trim();
+          else {
             const candidate = row.find(cell => typeof cell === 'string' && cell.trim().length > 5 && !/^\d+$/.test(cell.trim()));
             if (candidate) estudiante = candidate.trim();
           }
-
           if (!estudiante || /^(TOTAL|RESUMEN|N°|NUMERO)$/i.test(estudiante)) continue;
 
           pendingExcelRows.push({
@@ -2254,20 +2193,21 @@
             nivel: inferredNivel,
             aula: idxAula >= 0 && row[idxAula] ? String(row[idxAula]).trim() : inferredAula,
             tutor: currentUser.nombre,
-            policia: sedeObj ? sedeObj.pol : 'Policía Asignado',
+            policia: sedeObj.pol,
             salidaOficial: inferredNivel === 'Inicial' ? '13:00' : '14:30',
-            estado: 'EN AULA',
+            estado: FLOW_STATES.EN_AULA,
             quienRecogio: '—',
             dniFamiliar: idxDni >= 0 && row[idxDni] ? String(row[idxDni]).trim() : '—',
-            horaPuerta: '—',
-            horaSalidaTutor: 'Pendiente',
-            puntualidad: '🕒 En horario',
+            horaNotificacionPolicia: '—',
+            horaSalidaAulaTutor: '—',
+            horaRetiroConfirmado: '—',
+            puntualidad: '🕒 En aula',
             validacionAdmin: 'PENDIENTE',
             telefonoApoderado: idxCel >= 0 && row[idxCel] ? String(row[idxCel]).trim() : '+51 900 000 000'
           });
         }
 
-        document.getElementById('excelPreviewMeta').innerHTML = `Archivo: <strong>${file.name}</strong> • Detectados: <strong>${pendingExcelRows.length} estudiantes</strong> (${inferredNivel}) para <strong>${sedeObj.name}</strong>.`;
+        document.getElementById('excelPreviewMeta').innerHTML = `Archivo: <strong>${file.name}</strong> • Detectados: <strong>${pendingExcelRows.length} estudiantes registrados</strong> (${inferredNivel}) para <strong>${sedeObj.name}</strong>.`;
         document.getElementById('excelPreviewBody').innerHTML = pendingExcelRows.slice(0, 50).map(st => `
           <tr>
             <td class="px-3 py-2 font-mono text-slate-500">${st.codigoAlumno}</td>
@@ -2289,21 +2229,22 @@
       if (!pendingExcelRows.length) return;
       const sedeObj = SEDE_MAP[currentUser.codigoSede];
       appState.students.push(...pendingExcelRows);
+      appendProcessLog(pendingExcelRows[0], `IMPORTACIÓN EXCEL DE ${pendingExcelRows.length} ALUMNOS REGISTRADOS`);
       saveState();
-      pushToGoogleSheets('ADD_STUDENTS', { students: pendingExcelRows, sedeTab: sedeObj ? sedeObj.tab : '' });
+      pushToGoogleSheets('ADD_STUDENTS', { students: pendingExcelRows, sedeTab: sedeObj.tab });
       const total = pendingExcelRows.length;
       pendingExcelRows = [];
       closeModal('excelPreviewModal');
-      showToast(`Se importaron ${total} estudiantes y se sincronizaron con Google Sheets.`);
+      showToast(`Se registraron ${total} alumnos.`);
     });
 
+    // POLICÍA (PASOS 1 Y 3):
+    // - Paso 1: Si está EN AULA -> "Notificar a Tutor" (abre modal de familiar/DNI). Una vez notificado, queda bloqueado en Paso 1.
+    // - Paso 3: Si está SALIENDO DEL AULA (informado por tutor) -> "Confirmar Retiro". Una vez RETIRADO, queda bloqueado.
     function renderPoliceDashboard(container) {
       const sInfo = getSedeInfo(currentUser.codigoSede);
       const perms = new Set(currentUser.permisosPolicia || []);
       const sedeStudents = appState.students.filter(s => s.codigoSede === currentUser.codigoSede);
-      const visibleList = perms.has('estado')
-        ? sedeStudents
-        : sedeStudents.filter(s => s.estado.includes('PUERTA'));
 
       if (!perms.size) {
         container.innerHTML = `
@@ -2318,8 +2259,8 @@
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <div>
-              <h2 class="text-base font-extrabold text-slate-900">Control de Seguridad en Puerta — ${sInfo.name}</h2>
-              <p class="text-xs text-slate-500">Modalidad de sede: <strong>${sInfo.nivelesLabel}</strong>. Mostrando únicamente los campos autorizados por Administración General.</p>
+              <h2 class="text-base font-extrabold text-slate-900">Control en Puerta (Pasos 1 y 3) — ${sInfo.name}</h2>
+              <p class="text-xs text-slate-500">Solo alumnos registrados. <strong>Paso 1:</strong> Notifique al tutor cuando llegue el familiar. <strong>Paso 3:</strong> Confirme el retiro cuando el tutor informe que sale del aula. Los pasos registrados quedan bloqueados en esta vista.</p>
             </div>
             ${renderModalidadBadge(sInfo)}
           </div>
@@ -2327,23 +2268,36 @@
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <tr>
-                  <th class="px-3.5 py-2.5">Estudiante</th>
-                  ${perms.has('familiar') ? '<th class="px-3.5 py-2.5">Quién Recoge</th>' : ''}
+                  <th class="px-3.5 py-2.5">Código / Estudiante</th>
+                  ${perms.has('familiar') ? '<th class="px-3.5 py-2.5">Quien Recoge</th>' : ''}
                   ${perms.has('dni') ? '<th class="px-3.5 py-2.5">DNI Familiar</th>' : ''}
-                  ${(perms.has('alertas') || perms.has('estado')) ? '<th class="px-3.5 py-2.5">Estado</th>' : ''}
-                  ${perms.has('puerta') ? '<th class="px-3.5 py-2.5 text-right">Puerta</th>' : ''}
+                  ${(perms.has('alertas') || perms.has('estado')) ? '<th class="px-3.5 py-2.5">Estado del Flujo</th>' : ''}
+                  ${perms.has('puerta') ? '<th class="px-3.5 py-2.5 text-right">Acción (Paso 1 / Paso 3)</th>' : ''}
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-100">
-                ${visibleList.length ? visibleList.map(s => `
-                  <tr class="hover:bg-slate-50">
-                    <td class="px-3.5 py-2.5 font-bold text-slate-900">${s.estudiante}<div class="text-[10px] text-slate-400">${s.nivel} • ${s.aula}</div></td>
-                    ${perms.has('familiar') ? `<td class="px-3.5 py-2.5 text-slate-700">${s.quienRecogio}</td>` : ''}
-                    ${perms.has('dni') ? `<td class="px-3.5 py-2.5 font-mono text-slate-700">${s.dniFamiliar}</td>` : ''}
-                    ${(perms.has('alertas') || perms.has('estado')) ? `<td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>` : ''}
-                    ${perms.has('puerta') ? `<td class="px-3.5 py-2.5 text-right"><button type="button" onclick="openGatePickupModal('${s.codigoAlumno}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px]">Registrar Llegada</button></td>` : ''}
-                  </tr>
-                `).join('') : `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No hay alertas activas en puerta en este momento.</td></tr>`}
+                ${sedeStudents.length ? sedeStudents.map(s => {
+                  let actionBtn = '';
+                  if (s.estado === FLOW_STATES.EN_AULA) {
+                    actionBtn = `<button type="button" onclick="openPoliceNotifyModal('${s.codigoAlumno}')" class="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px]">Paso 1: Notificar Tutor</button>`;
+                  } else if (s.estado === FLOW_STATES.NOTIFICADO) {
+                    actionBtn = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-bold text-[11px]" title="Paso 1 ya registrado; esperando Paso 2 del tutor">🔒 Notificado (${s.horaNotificacionPolicia}) • Esp. Tutor</span>`;
+                  } else if (s.estado === FLOW_STATES.SALIENDO) {
+                    actionBtn = `<button type="button" onclick="policeConfirmStudentLeft('${s.codigoAlumno}')" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]">Paso 3: Confirmar Retiro</button>`;
+                  } else {
+                    actionBtn = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[11px]">🔒 Retirado (${s.horaRetiroConfirmado})</span>`;
+                  }
+
+                  return `
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-3.5 py-2.5"><span class="font-mono text-slate-400">${s.codigoAlumno}</span> • <strong class="text-slate-900">${s.estudiante}</strong><div class="text-[10px] text-slate-400">${s.nivel} • ${s.aula} • Tutor: ${s.tutor}</div></td>
+                      ${perms.has('familiar') ? `<td class="px-3.5 py-2.5 text-slate-700">${s.quienRecogio}</td>` : ''}
+                      ${perms.has('dni') ? `<td class="px-3.5 py-2.5 font-mono text-slate-700">${s.dniFamiliar}</td>` : ''}
+                      ${(perms.has('alertas') || perms.has('estado')) ? `<td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>` : ''}
+                      ${perms.has('puerta') ? `<td class="px-3.5 py-2.5 text-right">${actionBtn}</td>` : ''}
+                    </tr>
+                  `;
+                }).join('') : `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No hay alumnos registrados en esta sede.</td></tr>`}
               </tbody>
             </table>
           </div>
@@ -2352,11 +2306,10 @@
     }
 
     // =========================================================================
-    // 9. EXPORTACIÓN EXCEL COMPLETA (54 PESTAÑAS)
+    // 10. EXPORTACIÓN EXCEL Y UTILIDADES UI
     // =========================================================================
     function exportFullWorkbookXlsx() {
       const wb = XLSX.utils.book_new();
-
       const bitData = appState.bitacora.map(b => ({
         'N° Registro': b.num,
         'Fecha': b.fecha,
@@ -2369,14 +2322,14 @@
         'Policía Asignado': b.policia,
         'Código Alumno': b.codigoAlumno,
         'Alumno / Detalle': b.estudiante,
-        'Acción Desarrollada': b.accion,
+        'Proceso Registrado': b.accion,
         'Quién Recogió': b.quienRecogio,
         'DNI Familiar': b.dniFamiliar,
-        'Hora Llegada Puerta': b.horaPuerta,
-        'Hora Salida (Tutor)': b.horaSalidaTutor,
+        'Hora Notif. Policía': b.horaPuerta,
+        'Hora Salida Tutor': b.horaSalidaTutor,
         'Usuario Ejecutor': b.ejecutor
       }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bitData.length ? bitData : [{ Info: 'Sin eventos recientes' }]), TABS.BITACORA);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bitData.length ? bitData : [{ Info: 'Sin eventos recientes' }]), INTERNAL_SYSTEM_CONFIG.tabs.BITACORA);
 
       const aluData = appState.students.map(s => ({
         'Código Sede': s.codigoSede,
@@ -2392,59 +2345,18 @@
         'Estado Actual': s.estado,
         'Quién Recogió': s.quienRecogio,
         'DNI Familiar': s.dniFamiliar,
-        'Hora Llegada Puerta': s.horaPuerta,
-        'Hora Salida (Tutor)': s.horaSalidaTutor,
-        'Puntualidad': s.puntualidad,
-        'Validación Admin': s.validacionAdmin,
+        'Hora Notif. Policía': s.horaNotificacionPolicia,
+        'Hora Salida Tutor': s.horaSalidaAulaTutor,
+        'Hora Retiro Confirmado': s.horaRetiroConfirmado,
+        'Observación': s.puntualidad,
         'Teléfono Apoderado': s.telefonoApoderado
       }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(aluData.length ? aluData : [{ Info: 'Sin alumnos' }]), TABS.ALUMNOS);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(aluData.length ? aluData : [{ Info: 'Sin alumnos' }]), INTERNAL_SYSTEM_CONFIG.tabs.ALUMNOS);
 
-      const perfData = appState.accounts.map(a => ({
-        'Codigo_Sede': a.codigoSede,
-        'Sede_Institucional': a.sedeNombre,
-        'Modalidad': getSedeInfo(a.codigoSede).nivelesLabel,
-        'Perfil': a.perfil,
-        'Nombre_Completo': a.nombre,
-        'Aula_Nivel': a.aulaNivel,
-        'Usuario': a.usuario,
-        'Clave_Hash': a.passHash,
-        'Estado_Clave': a.estadoClave,
-        'Permisos_Policia': (a.permisosPolicia || []).join(',') || 'N/A'
-      }));
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(perfData), TABS.PERFILES);
-
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(appState.auditLogs), TABS.AUDITORIA);
-
-      SEDES_OFICIALES.forEach(s => {
-        const rows = appState.students.filter(st => st.codigoSede === s.code).map(st => ({
-          'Sede': st.sedeNombre,
-          'Modalidad': s.nivelesLabel,
-          'Director Sede': s.dir,
-          'Policía Asignado': s.pol,
-          'Nivel': st.nivel,
-          'Aula / Sección': st.aula,
-          'Tutor Asignado': st.tutor,
-          'Código Alumno': st.codigoAlumno,
-          'Alumno': st.estudiante,
-          'Hora Oficial Salida': st.salidaOficial,
-          'Estado': st.estado,
-          'Quién lo Recogió': `${st.quienRecogio} (DNI: ${st.dniFamiliar})`,
-          'Hora Llegada Puerta': st.horaPuerta,
-          'Hora Salida (Tutor)': st.horaSalidaTutor,
-          'Control Puntualidad': st.puntualidad,
-          'Teléfono Padre': st.telefonoApoderado
-        }));
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.length ? rows : [{ Sede: s.name, Modalidad: s.nivelesLabel, Estado: 'Sin registros' }]), s.tab);
-      });
-
-      XLSX.writeFile(wb, 'AulaSalida_Smart_48_Sedes_193_Perfiles.xlsx');
-      showToast('Archivo Excel consolidado (48 sedes • 193 perfiles) descargado.');
+      XLSX.writeFile(wb, 'AulaSalida_Smart_Flujo_3_Pasos.xlsx');
+      showToast('Reporte Excel exportado.');
     }
 
-    // =========================================================================
-    // 10. UTILIDADES UI
-    // =========================================================================
     function renderModalidadBadge(sInfo) {
       if (sInfo && sInfo.niveles && sInfo.niveles.includes('Inicial')) {
         return `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">Inicial y Primaria</span>`;
@@ -2453,14 +2365,17 @@
     }
 
     function renderStatusBadge(status) {
-      const s = String(status || '').toUpperCase();
-      if (s.includes('PUERTA') || s.includes('ALERTA')) {
-        return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">${status}</span>`;
+      const s = normalizeFlowState(status);
+      if (s === FLOW_STATES.RETIRADO) {
+        return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">✅ RETIRADO</span>`;
       }
-      if (s.includes('RETIRADO')) {
-        return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">${status}</span>`;
+      if (s === FLOW_STATES.SALIENDO) {
+        return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300">🚶 SALIENDO DEL AULA</span>`;
       }
-      return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${status || 'EN AULA'}</span>`;
+      if (s === FLOW_STATES.NOTIFICADO) {
+        return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">🔔 NOTIFICADO EN PUERTA</span>`;
+      }
+      return `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">EN AULA</span>`;
     }
 
     function closeModal(id) {
@@ -2475,7 +2390,6 @@
       window._toastTimer = setTimeout(() => box.classList.add('hidden'), 3800);
     }
 
-    // Sincronización automática inicial con Google Sheets
     syncAllFromGoogleSheets(true);
   </script>
 </body>
