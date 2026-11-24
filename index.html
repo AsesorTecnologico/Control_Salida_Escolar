@@ -1838,11 +1838,20 @@
     });
 
     function renderAdminAudit(container) {
+      const sedeFilterId = 'auditSedeFilter';
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <h2 class="text-base font-extrabold text-slate-900 mb-1">Registro Cronológico de Procesos del Flujo (3 Pasos)</h2>
-            <p class="text-xs text-slate-500 mb-4">Cada notificación del policía, aviso de salida del tutor y confirmación de retiro queda registrada.</p>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 class="text-base font-extrabold text-slate-900">Visualización Individualizada por Sede — Registro de Procesos (3 Pasos)</h2>
+                <p class="text-xs text-slate-500">Cada proceso queda registrado en la hoja de la sede correspondiente y en <strong>Bitacora_Global</strong>.</p>
+              </div>
+              <select id="${sedeFilterId}" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white">
+                <option value="ALL">Todas las Sedes (Bitacora_Global)</option>
+                ${SEDES_ALFABETICAS.map(s => `<option value="${s.code}">${s.shortName} (${s.code})</option>`).join('')}
+              </select>
+            </div>
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
@@ -1851,22 +1860,12 @@
                     <th class="px-3 py-2">Sede</th>
                     <th class="px-3 py-2">Alumno</th>
                     <th class="px-3 py-2">Proceso Registrado</th>
-                    <th class="px-3 py-2">Quien Recoge (DNI)</th>
+                    <th class="px-3 py-2">Quién Recogió (DNI)</th>
+                    <th class="px-3 py-2">Detalle</th>
                     <th class="px-3 py-2">Ejecutor</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
-                  ${appState.bitacora.length ? appState.bitacora.slice(0, 60).map(b => `
-                    <tr>
-                      <td class="px-3 py-2 font-mono text-slate-500">${b.fecha} ${b.hora}</td>
-                      <td class="px-3 py-2 font-semibold">${b.sedeNombre}</td>
-                      <td class="px-3 py-2 font-bold text-slate-900">${b.estudiante} <span class="font-mono text-[10px] text-slate-400">(${b.codigoAlumno})</span></td>
-                      <td class="px-3 py-2 font-bold text-blue-700">${b.accion}</td>
-                      <td class="px-3 py-2">${b.quienRecogio} (${b.dniFamiliar})</td>
-                      <td class="px-3 py-2 font-mono text-slate-500">${b.ejecutor}</td>
-                    </tr>
-                  `).join('') : `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">Sin eventos del flujo registrados aún.</td></tr>`}
-                </tbody>
+                <tbody id="auditBitacoraBody" class="divide-y divide-slate-100"></tbody>
               </table>
             </div>
           </div>
@@ -1900,6 +1899,30 @@
           </div>
         </div>
       `;
+
+      const paintBitacora = () => {
+        const sel = document.getElementById(sedeFilterId).value;
+        const rows = sel === 'ALL'
+          ? appState.bitacora
+          : appState.bitacora.filter(b => b.codigoSede === sel);
+        const tbody = document.getElementById('auditBitacoraBody');
+        tbody.innerHTML = rows.length
+          ? rows.slice(0, 80).map(b => `
+              <tr>
+                <td class="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">${b.fecha} ${b.hora}</td>
+                <td class="px-3 py-2 font-semibold">${b.sedeNombre}</td>
+                <td class="px-3 py-2 font-bold text-slate-900">${b.estudiante} <span class="font-mono text-[10px] text-slate-400">(${b.codigoAlumno})</span></td>
+                <td class="px-3 py-2 font-bold text-blue-700">${b.accion}</td>
+                <td class="px-3 py-2">${b.quienRecogio} (${b.dniFamiliar})</td>
+                <td class="px-3 py-2 text-slate-600 max-w-xs truncate" title="${b.detalle || ''}">${b.detalle || '—'}</td>
+                <td class="px-3 py-2 font-mono text-slate-500">${b.ejecutor}</td>
+              </tr>
+            `).join('')
+          : `<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">Sin eventos registrados para esta selección.</td></tr>`;
+      };
+
+      paintBitacora();
+      document.getElementById(sedeFilterId).addEventListener('change', paintBitacora);
     }
 
     // =========================================================================
