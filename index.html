@@ -928,6 +928,15 @@
       const now = new Date();
       const fecha = now.toISOString().slice(0, 10);
       const hora = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const ejecutor = currentUser ? currentUser.usuario : 'sistema';
+      const horaP1 = student.horaNotificacionPolicia || '—';
+      const horaP2 = student.horaSalidaAulaTutor || '—';
+      const horaP3 = student.horaRetiroConfirmado || '—';
+
+      const detalle =
+        extra.detalle ||
+        `${accion} | Sede: ${student.sedeNombre} | ${student.nivel} - ${student.aula} | Tutor: ${student.tutor} | Policía: ${student.policia} | Quien recoge: ${student.quienRecogio || '—'} (DNI: ${student.dniFamiliar || '—'}) | Horas P1/P2/P3: ${horaP1} / ${horaP2} / ${horaP3} | Registrado por: ${ejecutor}`;
+
       const entry = {
         num: appState.bitacora.length + 1,
         fecha,
@@ -943,10 +952,11 @@
         accion,
         quienRecogio: student.quienRecogio || '—',
         dniFamiliar: student.dniFamiliar || '—',
-        horaPuerta: student.horaNotificacionPolicia || '—',
-        horaSalidaTutor: student.horaSalidaAulaTutor || '—',
-        horaRetiro: student.horaRetiroConfirmado || '—',
-        ejecutor: currentUser ? currentUser.usuario : 'sistema',
+        horaPuerta: horaP1,
+        horaSalidaTutor: horaP2,
+        horaRetiro: horaP3,
+        ejecutor,
+        detalle,
         ...extra
       };
       appState.bitacora.unshift(entry);
