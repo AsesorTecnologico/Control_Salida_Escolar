@@ -1023,17 +1023,20 @@
         showToast('Solo se pueden procesar alumnos registrados en esta sede.');
         return;
       }
-      if (st.estado !== FLOW_STATES.NOTIFICADO) {
-        showToast('Solo puede informar salida del aula cuando el policía haya notificado la llegada y el paso no esté ya registrado.');
+      const allowedFromEnAula = st.estado === FLOW_STATES.EN_AULA && isExitTimeReached(st, getTodayDateISO());
+      const allowedFromNotificado = st.estado === FLOW_STATES.NOTIFICADO;
+
+      if (!allowedFromEnAula && !allowedFromNotificado) {
+        showToast('Aún no corresponde confirmar salida para este alumno o ya fue registrado.');
         return;
       }
 
       const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
       st.estado = FLOW_STATES.SALIENDO;
       st.horaSalidaAulaTutor = nowTime;
-      st.puntualidad = `🚶 Saliendo del aula (${nowTime})`;
+      st.puntualidad = `🚶 Salida confirmada por tutor (${nowTime})`;
 
-      const bitEntry = appendProcessLog(st, 'PASO 2: TUTOR INFORMÓ QUE ALUMNO SE RETIRA DEL AULA');
+      const bitEntry = appendProcessLog(st, 'PASO 2: TUTOR CONFIRMÓ / INFORMÓ SALIDA DEL ALUMNO DEL AULA');
       saveState();
 
       const sedeObj = SEDE_MAP[st.codigoSede];
@@ -1044,7 +1047,7 @@
       });
 
       renderActiveTab();
-      showToast(`Paso 2 registrado: ${st.estudiante} informado como saliendo del aula.`);
+      showToast(`Paso 2 registrado: ${st.estudiante} habilitado/confirmado para salida.`);
     }
 
     // PASO 3 (POLICÍA): Confirmar que el alumno se retiró con quien lo recogió
@@ -2017,56 +2020,121 @@
     // Una vez registrado (SALIENDO DEL AULA o RETIRADO), queda bloqueado para edición en la vista del Tutor.
     function renderTutorDashboard(container) {
       const sInfo = getSedeInfo(currentUser.codigoSede);
-      const list = appState.students.filter(s => s.codigoSede === currentUser.codigoSede);
-      container.innerHTML = `
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
-          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-            <div>
-              <h2 class="text-base font-extrabold text-slate-900">Paso 2 • Informar Salida del Aula — ${sInfo.name}</h2>
-              <p class="text-xs text-slate-500">Solo puede informar salida de alumnos registrados que ya fueron <strong>notificados en puerta</strong> por el policía. Una vez registrado, queda bloqueado en esta vista.</p>
-            </div>
-            ${renderModalidadBadge(sInfo)}
-          </div>
-          <div class="overflow-x-auto border border-slate-200 rounded-xl">
-            <table class="w-full text-left text-xs">
-              <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                <tr>
-                  <th class="px-3.5 py-2.5">Código / Estudiante</th>
-                  <th class="px-3.5 py-2.5">Nivel / Aula</th>
-                  <th class="px-3.5 py-2.5">Familiar Notificado (DNI)</th>
-                  <th class="px-3.5 py-2.5">Hora Notificación</th>
-                  <th class="px-3.5 py-2.5">Estado</th>
-                  <th class="px-3.5 py-2.5 text-right">Acción (Paso 2)</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-100">
-                ${list.length ? list.map(s => {
-                  const canInformLeaving = s.estado === FLOW_STATES.NOTIFICADO;
-                  let actionCell = '';
-                  if (canInformLeaving) {
-                    actionCell = `<button type="button" onclick="tutorInformLeavingClassroom('${s.codigoAlumno}')" class="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-[11px] shadow-sm">Informar Salida de Aula</button>`;
-                  } else if (s.estado === FLOW_STATES.EN_AULA) {
-                    actionCell = `<span class="text-[11px] text-slate-400 font-medium">Esperando aviso de policía</span>`;
-                  } else {
-                    actionCell = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-bold text-[11px]" title="Registrado y bloqueado en vista de Tutor">🔒 Registrado (${s.horaSalidaAulaTutor})</span>`;
-                  }
+      const today = getTodayDateISO();
+      const isToday = selectedOperationalDate === today;
+      const { students: list, dayLogs } = getDailyActivityForSede(currentUser.codigoSede, selectedOperationalDate);
+      const sched = (appState.schedules && appState.schedules[currentUser.codigoSede]) || buildDefaultSchedules()[currentUser.codigoSede] || {};
 
-                  return `
-                    <tr class="hover:bg-slate-50">
-                      <td class="px-3.5 py-2.5"><span class="font-mono text-slate-400">${s.codigoAlumno}</span> • <strong class="text-slate-900">${s.estudiante}</strong></td>
-                      <td class="px-3.5 py-2.5 text-slate-600">${s.nivel} • ${s.aula}</td>
-                      <td class="px-3.5 py-2.5 text-slate-700">${s.quienRecogio} <span class="font-mono text-slate-400">(${s.dniFamiliar})</span></td>
-                      <td class="px-3.5 py-2.5 font-mono text-slate-600">${s.horaNotificacionPolicia}</td>
-                      <td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>
-                      <td class="px-3.5 py-2.5 text-right">${actionCell}</td>
+      container.innerHTML = `
+        <div class="space-y-6 fade-in">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3">
+              <div>
+                <h2 class="text-base font-extrabold text-slate-900">Registro Diario y Salida del Aula — ${sInfo.name}</h2>
+                <p class="text-xs text-slate-500">
+                  Horario oficial:
+                  ${sInfo.niveles.includes('Inicial') ? `<strong>Inicial</strong> (${sched.ingresoInicial || '08:00'} – ${sched.salidaInicial || '13:00'}) • ` : ''}
+                  <strong>Primaria</strong> (${sched.ingresoPrimaria || '07:45'} – ${sched.salidaPrimaria || '14:30'}).
+                </p>
+              </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                ${renderModalidadBadge(sInfo)}
+                ${isToday ? `
+                  <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-xs font-semibold text-slate-700 cursor-pointer">
+                    <input id="overrideScheduleToggle" type="checkbox" ${overrideScheduleWindow ? 'checked' : ''} class="rounded text-blue-600" />
+                    Habilitar antes de hora
+                  </label>
+                ` : ''}
+              </div>
+            </div>
+
+            ${renderDateSelectorBar(currentUser.codigoSede)}
+
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="px-3.5 py-2.5">Código / Estudiante</th>
+                    <th class="px-3.5 py-2.5">Ingreso / Salida</th>
+                    <th class="px-3.5 py-2.5">Familiar Notificado (DNI)</th>
+                    <th class="px-3.5 py-2.5">Hora Notificación</th>
+                    <th class="px-3.5 py-2.5">Estado</th>
+                    <th class="px-3.5 py-2.5 text-right">Confirmación Tutor (Paso 2)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${list.length ? list.map(s => {
+                    const timeReady = isExitTimeReached(s, selectedOperationalDate);
+                    const hasPoliceNotice = s.estado === FLOW_STATES.NOTIFICADO;
+                    const canTutorConfirm = isToday && (hasPoliceNotice || (s.estado === FLOW_STATES.EN_AULA && timeReady));
+
+                    let actionCell = '';
+                    if (!isToday) {
+                      actionCell = `<span class="text-[11px] text-slate-500 font-semibold">Día ${selectedOperationalDate}</span>`;
+                    } else if (s.estado === FLOW_STATES.SALIENDO || s.estado === FLOW_STATES.RETIRADO) {
+                      actionCell = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-bold text-[11px]">🔒 Confirmado (${s.horaSalidaAulaTutor})</span>`;
+                    } else if (canTutorConfirm) {
+                      const btnLabel = hasPoliceNotice ? 'Confirmar Salida del Aula' : 'Habilitar / Confirmar Salida';
+                      actionCell = `<button type="button" onclick="tutorInformLeavingClassroom('${s.codigoAlumno}')" class="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-[11px] shadow-sm">${btnLabel}</button>`;
+                    } else {
+                      actionCell = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 font-semibold text-[11px]">⏳ Habilita a las ${s.salidaOficial}</span>`;
+                    }
+
+                    return `
+                      <tr class="hover:bg-slate-50">
+                        <td class="px-3.5 py-2.5"><span class="font-mono text-slate-400">${s.codigoAlumno}</span> • <strong class="text-slate-900">${s.estudiante}</strong><div class="text-[10px] text-slate-400">${s.nivel} • ${s.aula}</div></td>
+                        <td class="px-3.5 py-2.5 font-mono text-[11px] text-slate-700">Ing: ${s.ingresoOficial}<br/>Sal: <strong>${s.salidaOficial}</strong></td>
+                        <td class="px-3.5 py-2.5 text-slate-700">${s.quienRecogio} <span class="font-mono text-slate-400">(${s.dniFamiliar})</span></td>
+                        <td class="px-3.5 py-2.5 font-mono text-slate-600">${s.horaNotificacionPolicia}</td>
+                        <td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>
+                        <td class="px-3.5 py-2.5 text-right">${actionCell}</td>
+                      </tr>
+                    `;
+                  }).join('') : `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay registros de alumnos para la fecha seleccionada.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h3 class="text-sm font-extrabold text-slate-900 mb-1">Actividad Registrada (${selectedOperationalDate})</h3>
+            <p class="text-xs text-slate-500 mb-3">Incluye notificaciones, confirmaciones del tutor y retiros registrados en este día.</p>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="px-3 py-2">Hora</th>
+                    <th class="px-3 py-2">Alumno</th>
+                    <th class="px-3 py-2">Proceso</th>
+                    <th class="px-3 py-2">Quien Recoge (DNI)</th>
+                    <th class="px-3 py-2">Ejecutor</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${dayLogs.length ? dayLogs.map(ev => `
+                    <tr>
+                      <td class="px-3 py-2 font-mono text-slate-500">${ev.hora}</td>
+                      <td class="px-3 py-2 font-bold text-slate-900">${ev.estudiante} <span class="font-mono text-[10px] text-slate-400">(${ev.codigoAlumno})</span></td>
+                      <td class="px-3 py-2 font-semibold text-blue-700">${ev.accion}</td>
+                      <td class="px-3 py-2">${ev.quienRecogio} (${ev.dniFamiliar})</td>
+                      <td class="px-3 py-2 font-mono text-slate-500">${ev.ejecutor}</td>
                     </tr>
-                  `;
-                }).join('') : `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay alumnos registrados en esta sede.</td></tr>`}
-              </tbody>
-            </table>
+                  `).join('') : `<tr><td colspan="5" class="px-4 py-5 text-center text-slate-400">Sin movimientos registrados en ${selectedOperationalDate}.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       `;
+
+      bindDateSelectorEvents(() => renderActiveTab());
+      const toggle = document.getElementById('overrideScheduleToggle');
+      if (toggle) {
+        toggle.addEventListener('change', (e) => {
+          overrideScheduleWindow = e.target.checked;
+          renderActiveTab();
+        });
+      }
     }
 
     function renderTutorImport(container) {
@@ -2508,6 +2576,77 @@
     window.addEventListener('focus', () => {
       syncAllFromGoogleSheets(true);
     });
+
+
+    // Permite pruebas antes de la hora oficial si se activa en la vista del Tutor
+    let overrideScheduleWindow = false;
+
+    function getCurrentMinutesOfDay() {
+      const now = new Date();
+      return now.getHours() * 60 + now.getMinutes();
+    }
+
+    function parseTimeToMinutes(hhmm) {
+      if (!hhmm || typeof hhmm !== 'string' || !hhmm.includes(':')) return null;
+      const parts = hhmm.split(':').map(Number);
+      if (parts.length < 2 || Number.isNaN(parts[0]) || Number.isNaN(parts[1])) return null;
+      return parts[0] * 60 + parts[1];
+    }
+
+    // Verifica si ya llegó la hora oficial de salida de la sede/nivel para la fecha seleccionada
+    function isExitTimeReached(student, dateISO) {
+      const today = getTodayDateISO();
+      if (dateISO !== today) return true; // En fechas anteriores ya ocurrió su jornada
+      if (overrideScheduleWindow) return true;
+
+      const times = getSedeOfficialTimes(student.codigoSede, student.nivel);
+      const exitMin = parseTimeToMinutes(times.salida);
+      if (exitMin === null) return true;
+      return getCurrentMinutesOfDay() >= exitMin;
+    }
+
+    // Devuelve los registros de alumnos y el historial de actividad de la fecha seleccionada
+    function getDailyActivityForSede(sedeCode, dateISO) {
+      const today = getTodayDateISO();
+      const sedeStudents = appState.students.filter(s => s.codigoSede === sedeCode);
+      const dayLogs = appState.bitacora.filter(b => b.codigoSede === sedeCode && b.fecha === dateISO);
+
+      const studentsForDate = sedeStudents.map((st) => {
+        const times = getSedeOfficialTimes(sedeCode, st.nivel);
+        const stDayLogs = dayLogs.filter(b => b.codigoAlumno === st.codigoAlumno);
+        const latestLog = stDayLogs.length ? stDayLogs[0] : null;
+
+        if (dateISO === today) {
+          return {
+            ...st,
+            ingresoOficial: times.ingreso,
+            salidaOficial: times.salida,
+            dayEventsCount: stDayLogs.length
+          };
+        }
+
+        // En días anteriores, reconstruye el estado y datos registrados en esa fecha
+        const restoredState = latestLog ? normalizeFlowState(latestLog.accion) : FLOW_STATES.EN_AULA;
+        return {
+          ...st,
+          ingresoOficial: times.ingreso,
+          salidaOficial: times.salida,
+          estado: restoredState,
+          quienRecogio: (latestLog && latestLog.quienRecogio) || st.quienRecogio || '—',
+          dniFamiliar: (latestLog && latestLog.dniFamiliar) || st.dniFamiliar || '—',
+          horaNotificacionPolicia: (latestLog && latestLog.horaPuerta) || st.horaNotificacionPolicia || '—',
+          horaSalidaAulaTutor: (latestLog && latestLog.horaSalidaTutor) || st.horaSalidaAulaTutor || '—',
+          horaRetiroConfirmado: (latestLog && latestLog.horaRetiro) || st.horaRetiroConfirmado || '—',
+          puntualidad: (latestLog && latestLog.detalle) || st.puntualidad || restoredState,
+          dayEventsCount: stDayLogs.length
+        };
+      });
+
+      return {
+        students: studentsForDate,
+        dayLogs
+      };
+    }
   </script>
 </body>
 </html>
