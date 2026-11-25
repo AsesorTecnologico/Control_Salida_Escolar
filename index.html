@@ -88,7 +88,7 @@
     // =========================================================================
     // 1. SEDES, GRADOS DISPONIBLES Y PERFILES DE ACCESO POR SEDE
     // =========================================================================
-    const STORAGE_KEY = 'aulasalida_smart_flow_v6';
+    const STORAGE_KEY = 'aulasalida_smart_flow_v7';
     const SHEETS_WEBHOOK_URL = '';
 
     const TABLES = {
@@ -143,7 +143,6 @@
     function buildAccessProfilesForSedes() {
       const profiles = [];
 
-      // Perfil Administrador confirmado del sistema
       profiles.push({
         codigoPerfil: 'PERF-ADMIN',
         usuario: 'admin.general',
@@ -155,7 +154,6 @@
         estado: 'ACTIVO'
       });
 
-      // Perfiles por sede: Tutor Puerta y Tutor Aula
       SEDES_Y_GRADOS.forEach(s => {
         const slug = s.codigoSede.toLowerCase();
         profiles.push({
@@ -235,13 +233,14 @@
         gradosDisponibles: s.grados.join(' | ')
       }));
 
+      // Cada alumno tiene: nombreAlumno, grado, aula (más metadata operativa por sede)
       const tbl_alumnos = [
-        { codigoAlumno: 'ALU-101', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Mateo Quispe Ramos', nivel: 'Primaria', gradoSeccion: '3° Grado A', tutorAula: 'Tutor Aula — S01 - CAJAMARCA', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-102', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Sofía Mendoza Díaz', nivel: 'Primaria', gradoSeccion: '3° Grado A', tutorAula: 'Tutor Aula — S01 - CAJAMARCA', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-103', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Liam Huamán Castro', nivel: 'Primaria', gradoSeccion: '4° Grado B', tutorAula: 'Tutor Aula — S01 - CAJAMARCA', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-104', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Valeria Salazar Ríos', nivel: 'Inicial', gradoSeccion: 'Inicial 5 Años', tutorAula: 'Tutor Aula — S01 - CAJAMARCA', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-201', codigoSede: 'S02', nombreSede: 'S02 - CAMPOY', nombreAlumno: 'Gabriel Herrera Luna', nivel: 'Primaria', gradoSeccion: '2° Grado A', tutorAula: 'Tutor Aula — S02 - CAMPOY', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-301', codigoSede: 'S03', nombreSede: 'S03 - EL AGUSTINO', nombreAlumno: 'Camila Paredes Soto', nivel: 'Primaria', gradoSeccion: '5° Grado A', tutorAula: 'Tutor Aula — S03 - EL AGUSTINO', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today }
+        { codigoAlumno: 'ALU-101', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Mateo Quispe Ramos', grado: '3° Grado A', aula: 'Aula 101', nivel: 'Primaria', gradoSeccion: '3° Grado A', tutorAula: 'Tutor Aula — S01 - CAJAMARCA', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
+        { codigoAlumno: 'ALU-102', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Sofía Mendoza Díaz', grado: '3° Grado A', aula: 'Aula 101', nivel: 'Primaria', gradoSeccion: '3° Grado A', tutorAula: 'Tutor Aula — S01 - CAJAMARCA', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
+        { codigoAlumno: 'ALU-103', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Liam Huamán Castro', grado: '4° Grado B', aula: 'Aula 104', nivel: 'Primaria', gradoSeccion: '4° Grado B', tutorAula: 'Tutor Aula — S01 - CAJAMARCA', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
+        { codigoAlumno: 'ALU-104', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Valeria Salazar Ríos', grado: 'Inicial 5 Años', aula: 'Aula I-02', nivel: 'Inicial', gradoSeccion: 'Inicial 5 Años', tutorAula: 'Tutor Aula — S01 - CAJAMARCA', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
+        { codigoAlumno: 'ALU-201', codigoSede: 'S02', nombreSede: 'S02 - CAMPOY', nombreAlumno: 'Gabriel Herrera Luna', grado: '2° Grado A', aula: 'Aula 202', nivel: 'Primaria', gradoSeccion: '2° Grado A', tutorAula: 'Tutor Aula — S02 - CAMPOY', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today },
+        { codigoAlumno: 'ALU-301', codigoSede: 'S03', nombreSede: 'S03 - EL AGUSTINO', nombreAlumno: 'Camila Paredes Soto', grado: '5° Grado A', aula: 'Aula 305', nivel: 'Primaria', gradoSeccion: '5° Grado A', tutorAula: 'Tutor Aula — S03 - EL AGUSTINO', etapaFlujo: FLOW_STEP.INICIO, procesoOrigen: '—', detalleOrigen: '—', horaAccion1: '—', horaAccion2: '—', horaSalidaAula: '—', fechaDia: today }
       ];
 
       const tbl_movilidades = [
@@ -253,15 +252,15 @@
           placa: 'B4K-712',
           conductor: 'Sr. Martín Rojas',
           capacidadMaxima: 10,
-          gradosSecciones: 'Primaria - 3° Grado A | Primaria - 4° Grado B | Inicial - Inicial 5 Años',
+          gradosSecciones: '3° Grado A (Aula 101) | 4° Grado B (Aula 104) | Inicial 5 Años (Aula I-02)',
           estado: 'ACTIVA'
         }
       ];
 
       const tbl_movilidad_alumnos = [
-        { idMovilidad: 'MOV-01', codigoSede: 'S01', codigoAlumno: 'ALU-101', nombreAlumno: 'Mateo Quispe Ramos', nivel: 'Primaria', gradoSeccion: '3° Grado A' },
-        { idMovilidad: 'MOV-01', codigoSede: 'S01', codigoAlumno: 'ALU-103', nombreAlumno: 'Liam Huamán Castro', nivel: 'Primaria', gradoSeccion: '4° Grado B' },
-        { idMovilidad: 'MOV-01', codigoSede: 'S01', codigoAlumno: 'ALU-104', nombreAlumno: 'Valeria Salazar Ríos', nivel: 'Inicial', gradoSeccion: 'Inicial 5 Años' }
+        { idMovilidad: 'MOV-01', codigoSede: 'S01', codigoAlumno: 'ALU-101', nombreAlumno: 'Mateo Quispe Ramos', grado: '3° Grado A', aula: 'Aula 101' },
+        { idMovilidad: 'MOV-01', codigoSede: 'S01', codigoAlumno: 'ALU-103', nombreAlumno: 'Liam Huamán Castro', grado: '4° Grado B', aula: 'Aula 104' },
+        { idMovilidad: 'MOV-01', codigoSede: 'S01', codigoAlumno: 'ALU-104', nombreAlumno: 'Valeria Salazar Ríos', grado: 'Inicial 5 Años', aula: 'Aula I-02' }
       ];
 
       const tbl_notificaciones_aula = [];
@@ -337,15 +336,21 @@
       if (currentUser) {
         renderCurrentTab();
       }
-      showToast('Tablas creadas nuevamente con los perfiles por sede y grados disponibles.');
+      showToast('Tablas creadas nuevamente por sede.');
     }
 
     let appState = loadState();
     let currentUser = null;
     let activeTab = '';
+    let selectedSedeForAdmin = SEDES_Y_GRADOS[0].codigoSede;
+
+    function getActiveSedeCode() {
+      if (!currentUser) return SEDES_Y_GRADOS[0].codigoSede;
+      return currentUser.perfil === 'ADMINISTRADOR' ? selectedSedeForAdmin : currentUser.codigoSede;
+    }
 
     // =========================================================================
-    // 3. AUTENTICACIÓN POR SEDE Y PERFIL (TUTOR PUERTA / TUTOR AULA / ADMINISTRADOR)
+    // 3. AUTENTICACIÓN POR SEDE Y PERFIL
     // =========================================================================
     document.getElementById('loginForm').addEventListener('submit', e => {
       e.preventDefault();
@@ -401,22 +406,25 @@
       renderCurrentTab();
     }
 
+    // Todos los perfiles tienen acceso al módulo individual de CARGA DE ALUMNOS por sede
+    // y a su módulo / tabla de procesos individual por sede
     function getTabsForRole(perfil) {
       if (perfil === 'TUTOR_PUERTA') {
         return [
-          { id: 'tutorFlow', label: 'Flujo: Proceso A/B → Tutor → Aula' },
-          { id: 'tablesView', label: 'Tablas del Proceso' }
+          { id: 'tutorFlow', label: 'Flujo y Tabla de Procesos (Sede)' },
+          { id: 'cargaAlumnos', label: 'Carga de Alumnos (Sede)' }
         ];
       }
       if (perfil === 'TUTOR_AULA') {
         return [
-          { id: 'aulaModule', label: 'Módulo Tutor Aula (Salida → Fin)' },
-          { id: 'tablesView', label: 'Tablas del Proceso' }
+          { id: 'aulaModule', label: 'Módulo Aula y Procesos (Sede)' },
+          { id: 'cargaAlumnos', label: 'Carga de Alumnos (Sede)' }
         ];
       }
       return [
-        { id: 'mobilitySetup', label: 'Sedes, Grados y Movilidades' },
-        { id: 'tablesView', label: 'Todas las Tablas' }
+        { id: 'cargaAlumnos', label: 'Carga de Alumnos (Por Sede)' },
+        { id: 'processBySede', label: 'Tabla de Procesos (Por Sede)' },
+        { id: 'mobilitySetup', label: 'Sedes y Movilidades' }
       ];
     }
 
@@ -443,12 +451,164 @@
     function renderCurrentTab() {
       ensureDayRollover(appState);
       const container = document.getElementById('mainContent');
+      if (activeTab === 'cargaAlumnos') return renderCargaAlumnosPorSede(container);
+      if (activeTab === 'processBySede') return renderTablaProcesosPorSede(container);
       if (activeTab === 'tutorFlow') return renderTutorGateFlow(container);
       if (activeTab === 'aulaModule') return renderTutorAulaModule(container);
-      if (activeTab === 'mobilitySetup') return renderMobilityAndGradesSetup(container);
-      return renderTablesExplorer(container);
+      return renderMobilityAndGradesSetup(container);
     }
 
+    function renderAdminSedeSelectorHtml() {
+      if (currentUser.perfil !== 'ADMINISTRADOR') return '';
+      return `
+        <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 block">Selección Individual de Sede</span>
+            <span class="text-xs text-slate-600">Mostrando información individual para <strong>${getSedeConfig(selectedSedeForAdmin).nombreSede}</strong></span>
+          </div>
+          <select id="adminSedePicker" class="px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-900">
+            ${SEDES_Y_GRADOS.map(s => `<option value="${s.codigoSede}" ${s.codigoSede === selectedSedeForAdmin ? 'selected' : ''}>${s.nombreSede}</option>`).join('')}
+          </select>
+        </div>
+      `;
+    }
+
+    function bindAdminSedeSelector(container) {
+      const picker = container.querySelector('#adminSedePicker');
+      if (!picker) return;
+      picker.addEventListener('change', () => {
+        selectedSedeForAdmin = picker.value;
+        renderCurrentTab();
+      });
+    }
+
+    // =========================================================================
+    // 4. MÓDULO INDIVIDUAL DE CARGA DE ALUMNOS POR SEDE (SOLO: NOMBRE, GRADO, AULA)
+    // =========================================================================
+    function renderCargaAlumnosPorSede(container) {
+      const sedeCode = getActiveSedeCode();
+      const sedeCfg = getSedeConfig(sedeCode);
+      const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
+
+      container.innerHTML = `
+        <div class="space-y-6 fade-in">
+          ${renderAdminSedeSelectorHtml()}
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm h-fit">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <h2 class="text-base font-extrabold text-slate-900">Carga de Alumnos</h2>
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">${sedeCfg.codigoSede}</span>
+              </div>
+              <p class="text-xs text-slate-500 mb-4">Registro individual de <strong>${sedeCfg.nombreSede}</strong> (Nombre del alumno, Grado y Aula).</p>
+
+              <form id="cargaAlumnoSedeForm" class="space-y-3.5">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Nombre Alumno</label>
+                  <input id="inpNombreAlumno" type="text" required placeholder="Ej. Lucía Mendoza Cruz"
+                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Grado</label>
+                  <select id="inpGradoAlumno" required
+                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600">
+                    ${sedeCfg.grados.map(g => `<option value="${g}">${g}</option>`).join('')}
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Aula</label>
+                  <input id="inpAulaAlumno" type="text" required placeholder="Ej. Aula 201"
+                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                </div>
+
+                <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
+                  Agregar Alumno a ${sedeCfg.codigoSede}
+                </button>
+              </form>
+            </div>
+
+            <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div>
+                  <h3 class="text-base font-extrabold text-slate-900">Alumnos Cargados — ${sedeCfg.nombreSede}</h3>
+                  <p class="text-xs text-slate-500">Listado individual de la sede: Nombre Alumno, Grado y Aula.</p>
+                </div>
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">${alumnosSede.length} alumno(s)</span>
+              </div>
+
+              <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-2.5">Nombre Alumno</th>
+                      <th class="px-4 py-2.5">Grado</th>
+                      <th class="px-4 py-2.5">Aula</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    ${alumnosSede.length ? alumnosSede.map(a => `
+                      <tr>
+                        <td class="px-4 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
+                        <td class="px-4 py-2.5 text-slate-700">${a.grado}</td>
+                        <td class="px-4 py-2.5 font-semibold text-blue-800">${a.aula}</td>
+                      </tr>
+                    `).join('') : `
+                      <tr>
+                        <td colspan="3" class="px-4 py-8 text-center text-slate-400">No hay alumnos cargados en esta sede.</td>
+                      </tr>
+                    `}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      bindAdminSedeSelector(container);
+
+      document.getElementById('cargaAlumnoSedeForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const nombreAlumno = document.getElementById('inpNombreAlumno').value.trim();
+        const grado = document.getElementById('inpGradoAlumno').value;
+        const aula = document.getElementById('inpAulaAlumno').value.trim();
+        if (!nombreAlumno || !grado || !aula) return;
+
+        const nivel = grado.toLowerCase().startsWith('inicial') ? 'Inicial' : 'Primaria';
+        const codigoAlumno = `ALU-${sedeCode}-${Date.now().toString().slice(-4)}`;
+
+        const nuevoAlumno = {
+          codigoAlumno,
+          codigoSede: sedeCode,
+          nombreSede: sedeCfg.nombreSede,
+          nombreAlumno,
+          grado,
+          aula,
+          nivel,
+          gradoSeccion: grado,
+          tutorAula: `Tutor Aula — ${sedeCfg.nombreSede}`,
+          etapaFlujo: FLOW_STEP.INICIO,
+          procesoOrigen: '—',
+          detalleOrigen: '—',
+          horaAccion1: '—',
+          horaAccion2: '—',
+          horaSalidaAula: '—',
+          fechaDia: getTodayISO()
+        };
+
+        appState.tbl_alumnos.push(nuevoAlumno);
+        saveState();
+        syncTableEvent('ADD_ALUMNO_SEDE', { alumno: nuevoAlumno });
+        renderCurrentTab();
+        showToast(`Alumno "${nombreAlumno}" agregado a ${sedeCfg.nombreSede}.`);
+      });
+    }
+
+    // =========================================================================
+    // 5. TABLA DE PROCESOS INDIVIDUAL POR CADA SEDE
+    // =========================================================================
     function getEtapaBadge(etapa) {
       if (etapa === FLOW_STEP.FINALIZADO) {
         return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">FIN DEL FLUJO (SALIDA)</span>`;
@@ -462,8 +622,69 @@
       return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">INICIO (PROCESO A/B)</span>`;
     }
 
+    function renderTablaProcesosPorSede(container) {
+      const sedeCode = getActiveSedeCode();
+      const sedeCfg = getSedeConfig(sedeCode);
+      const procesosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
+
+      container.innerHTML = `
+        <div class="space-y-6 fade-in">
+          ${renderAdminSedeSelectorHtml()}
+
+          <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div>
+                <h2 class="text-base font-extrabold text-slate-900">Tabla de Procesos — ${sedeCfg.nombreSede}</h2>
+                <p class="text-xs text-slate-500">Información individual de procesos correspondiente únicamente a la sede <strong>${sedeCfg.nombreSede}</strong>.</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">${procesosSede.length} registro(s) en ${sedeCfg.codigoSede}</span>
+            </div>
+
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="px-3 py-2.5">Nombre Alumno</th>
+                    <th class="px-3 py-2.5">Grado</th>
+                    <th class="px-3 py-2.5">Aula</th>
+                    <th class="px-3 py-2.5">Proceso Origen</th>
+                    <th class="px-3 py-2.5">Detalle</th>
+                    <th class="px-3 py-2.5">Etapa</th>
+                    <th class="px-3 py-2.5">Hora Acción 1</th>
+                    <th class="px-3 py-2.5">Hora Notif. Aula</th>
+                    <th class="px-3 py-2.5">Hora Salida</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${procesosSede.length ? procesosSede.map(p => `
+                    <tr>
+                      <td class="px-3 py-2.5 font-bold text-slate-900">${p.nombreAlumno}</td>
+                      <td class="px-3 py-2.5 text-slate-700">${p.grado}</td>
+                      <td class="px-3 py-2.5 font-semibold text-blue-800">${p.aula}</td>
+                      <td class="px-3 py-2.5 text-slate-700">${p.procesoOrigen}</td>
+                      <td class="px-3 py-2.5 text-slate-600">${p.detalleOrigen}</td>
+                      <td class="px-3 py-2.5">${getEtapaBadge(p.etapaFlujo)}</td>
+                      <td class="px-3 py-2.5 font-mono text-slate-600">${p.horaAccion1}</td>
+                      <td class="px-3 py-2.5 font-mono text-slate-600">${p.horaAccion2}</td>
+                      <td class="px-3 py-2.5 font-mono text-slate-600">${p.horaSalidaAula}</td>
+                    </tr>
+                  `).join('') : `
+                    <tr>
+                      <td colspan="9" class="px-4 py-8 text-center text-slate-400">No hay procesos registrados para esta sede.</td>
+                    </tr>
+                  `}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+
+      bindAdminSedeSelector(container);
+    }
+
     // =========================================================================
-    // 4. FLUJO PRINCIPAL: PROCESO A / B -> TUTOR O PERSONAL -> 2 ACCIONES -> AULA
+    // 6. FLUJO TUTOR PUERTA Y MÓDULO TUTOR AULA (POR SEDE)
     // =========================================================================
     function tutorAccion1Verificar(codigoAlumno, procesoTipo, detalleTexto) {
       const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
@@ -478,7 +699,7 @@
       saveState();
       syncTableEvent('ACCION_1_VERIFICAR', { codigoAlumno, procesoTipo, detalleTexto, hora });
       renderCurrentTab();
-      showToast(`Acción 1 completada: ${st.nombreAlumno} (${st.gradoSeccion}).`);
+      showToast(`Acción 1 completada: ${st.nombreAlumno} (${st.grado} — ${st.aula}).`);
     }
 
     function tutorAccion2NotificarAula(codigoAlumno) {
@@ -502,8 +723,8 @@
         detalleOrigen: st.detalleOrigen || 'Llegada en puerta',
         codigoAlumno: st.codigoAlumno,
         nombreAlumno: st.nombreAlumno,
-        nivel: st.nivel,
-        gradoSeccion: st.gradoSeccion,
+        grado: st.grado,
+        aula: st.aula,
         tutorPuerta: currentUser.nombre,
         tutorAula: st.tutorAula,
         estadoNotificacion: 'ENVIADA_A_MODULO_AULA'
@@ -534,7 +755,7 @@
 
         st.etapaFlujo = FLOW_STEP.ACCION_2_NOTIFICADO;
         st.procesoOrigen = 'PROCESO B (MOVILIDAD)';
-        st.detalleOrigen = `${mov.nombreMovilidad} [${mov.placa}] — Grados/Secciones: ${mov.gradosSecciones}`;
+        st.detalleOrigen = `${mov.nombreMovilidad} [${mov.placa}] — ${st.grado} (${st.aula})`;
         if (st.horaAccion1 === '—') st.horaAccion1 = hora;
         st.horaAccion2 = hora;
 
@@ -548,8 +769,8 @@
           detalleOrigen: st.detalleOrigen,
           codigoAlumno: st.codigoAlumno,
           nombreAlumno: st.nombreAlumno,
-          nivel: st.nivel,
-          gradoSeccion: st.gradoSeccion,
+          grado: st.grado,
+          aula: st.aula,
           tutorPuerta: currentUser.nombre,
           tutorAula: st.tutorAula,
           estadoNotificacion: 'ENVIADA_A_MODULO_AULA'
@@ -559,7 +780,7 @@
       saveState();
       syncTableEvent('ACCION_2_NOTIFICAR_MOVILIDAD', { idMovilidad, horaNotificacionAula: hora, tutorPuerta: currentUser.nombre });
       renderCurrentTab();
-      showToast(`Notificada movilidad "${mov.nombreMovilidad}" (${mov.gradosSecciones}) al Módulo Tutor Aula.`);
+      showToast(`Notificada movilidad "${mov.nombreMovilidad}" al Módulo Tutor Aula.`);
     }
 
     function renderTutorGateFlow(container) {
@@ -570,41 +791,11 @@
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
-          <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <p class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Recorrido del Proceso — ${sedeCfg.nombreSede}</p>
-              <p class="text-[11px] font-semibold text-blue-800">Grados disponibles: ${sedeCfg.grados.join(', ')}</p>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
-              <div class="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                <span class="font-extrabold text-blue-900 block">1. Inicio: Proceso A o B</span>
-                <span class="text-[11px] text-blue-800">A: Papá/Familiar &bull; B: Movilidad (grados/secciones)</span>
-              </div>
-              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span class="font-extrabold text-slate-900 block">2. Tutor Puerta</span>
-                <span class="text-[11px] text-slate-600">Atiende el ingreso en puerta</span>
-              </div>
-              <div class="p-3 rounded-xl bg-amber-50 border border-amber-200">
-                <span class="font-extrabold text-amber-900 block">3. Acción 1 del Tutor</span>
-                <span class="text-[11px] text-amber-800">Verifica datos o movilidad y grados/secciones</span>
-              </div>
-              <div class="p-3 rounded-xl bg-indigo-50 border border-indigo-200">
-                <span class="font-extrabold text-indigo-900 block">4. Acción 2 del Tutor</span>
-                <span class="text-[11px] text-indigo-800">Envía notificación al Módulo Tutor Aula</span>
-              </div>
-              <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                <span class="font-extrabold text-emerald-900 block">5. Tutor Aula &rarr; Fin</span>
-                <span class="text-[11px] text-emerald-800">Registra salida y finaliza el flujo</span>
-              </div>
-            </div>
-          </div>
-
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <h2 class="text-sm font-extrabold text-slate-900 mb-1">Proceso B — Servicio de Movilidad (Indica Grados y Secciones)</h2>
-            <p class="text-xs text-slate-500 mb-4">Al llegar la movilidad, el Tutor Puerta verifica grados/secciones y notifica al Tutor Aula.</p>
-
+            <h2 class="text-sm font-extrabold text-slate-900 mb-1">Proceso B — Servicio de Movilidad (${sedeCfg.nombreSede})</h2>
+            <p class="text-xs text-slate-500 mb-4">Al llegar la movilidad, el Tutor Puerta notifica al Tutor Aula.</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              ${movilidadesSede.map(m => {
+              ${movilidadesSede.length ? movilidadesSede.map(m => {
                 const count = appState.tbl_movilidad_alumnos.filter(x => x.idMovilidad === m.idMovilidad).length;
                 return `
                   <div class="p-4 rounded-xl border border-teal-200 bg-teal-50/40 flex flex-col justify-between gap-3">
@@ -613,7 +804,7 @@
                         <span class="font-extrabold text-xs text-slate-900">${m.nombreMovilidad}</span>
                         <span class="text-[11px] font-mono font-bold text-teal-800">${m.placa} &bull; ${count} alumno(s)</span>
                       </div>
-                      <p class="text-[11px] text-slate-700 mt-1.5"><strong>Grados y Secciones:</strong> ${m.gradosSecciones}</p>
+                      <p class="text-[11px] text-slate-700 mt-1.5"><strong>Grados y Aulas:</strong> ${m.gradosSecciones}</p>
                     </div>
                     <button type="button" data-notify-mov="${m.idMovilidad}"
                       class="w-full py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow">
@@ -621,19 +812,19 @@
                     </button>
                   </div>
                 `;
-              }).join('')}
+              }).join('') : `<p class="text-xs text-slate-400">No hay movilidades registradas en ${sedeCfg.nombreSede}.</p>`}
             </div>
           </div>
 
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <h2 class="text-sm font-extrabold text-slate-900 mb-1">Proceso A (Papá / Familiar) y Seguimiento por Estudiante</h2>
-            <p class="text-xs text-slate-500 mb-4">Ejecute primero <strong>Acción 1 (Verificar)</strong> y luego <strong>Acción 2 (Notificar Aula)</strong>.</p>
+            <h2 class="text-sm font-extrabold text-slate-900 mb-1">Tabla de Procesos Individual — ${sedeCfg.nombreSede}</h2>
+            <p class="text-xs text-slate-500 mb-4">Ejecute <strong>Acción 1 (Verificar)</strong> y luego <strong>Acción 2 (Notificar Aula)</strong>.</p>
 
             <form id="procesoAForm" class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-5 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
               <div>
                 <label class="block text-[11px] font-bold text-slate-700 mb-1">Estudiante</label>
                 <select id="procAStudent" class="w-full px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
-                  ${alumnosSede.map(a => `<option value="${a.codigoAlumno}">${a.nombreAlumno} (${a.gradoSeccion})</option>`).join('')}
+                  ${alumnosSede.map(a => `<option value="${a.codigoAlumno}">${a.nombreAlumno} (${a.grado} — ${a.aula})</option>`).join('')}
                 </select>
               </div>
               <div>
@@ -657,8 +848,9 @@
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
-                    <th class="px-3 py-2.5">Alumno</th>
-                    <th class="px-3 py-2.5">Grado / Sección</th>
+                    <th class="px-3 py-2.5">Nombre Alumno</th>
+                    <th class="px-3 py-2.5">Grado</th>
+                    <th class="px-3 py-2.5">Aula</th>
                     <th class="px-3 py-2.5">Proceso / Detalle</th>
                     <th class="px-3 py-2.5">Etapa</th>
                     <th class="px-3 py-2.5 text-right">Acciones del Tutor</th>
@@ -668,7 +860,8 @@
                   ${alumnosSede.map(a => `
                     <tr>
                       <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
-                      <td class="px-3 py-2.5 text-slate-700">${a.nivel} &bull; ${a.gradoSeccion}</td>
+                      <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
+                      <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
                       <td class="px-3 py-2.5 text-slate-600">${a.procesoOrigen} <span class="text-[11px] block text-slate-500">${a.detalleOrigen}</span></td>
                       <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo)}</td>
                       <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
@@ -717,9 +910,6 @@
       });
     }
 
-    // =========================================================================
-    // 5. MÓDULO TUTOR AULA: RECIBE NOTIFICACIÓN Y CONCLUYE EL FLUJO (SALIDA)
-    // =========================================================================
     function moduloAulaRegistrarSalidaFin(codigoAlumno) {
       const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
       if (!st) return;
@@ -740,8 +930,8 @@
         detalleOrigen: st.detalleOrigen,
         codigoAlumno: st.codigoAlumno,
         nombreAlumno: st.nombreAlumno,
-        nivel: st.nivel,
-        gradoSeccion: st.gradoSeccion,
+        grado: st.grado,
+        aula: st.aula,
         tutorAula: currentUser.nombre,
         estadoFinal: 'FIN_DEL_FLUJO'
       });
@@ -749,29 +939,31 @@
       saveState();
       syncTableEvent('MODULO_AULA_SALIDA_FIN', { codigoAlumno, horaSalidaAula: horaSalida, tutorAula: currentUser.nombre });
       renderCurrentTab();
-      showToast(`Fin del flujo: salida registrada para ${st.nombreAlumno} (${st.gradoSeccion}).`);
+      showToast(`Fin del flujo: salida registrada para ${st.nombreAlumno} (${st.grado} — ${st.aula}).`);
     }
 
     function renderTutorAulaModule(container) {
       const sedeCode = currentUser.codigoSede;
+      const sedeCfg = getSedeConfig(sedeCode);
       const pendientesAula = appState.tbl_alumnos.filter(
         a => a.codigoSede === sedeCode && a.etapaFlujo === FLOW_STEP.ACCION_2_NOTIFICADO
       );
-      const salidasHoy = appState.tbl_salidas_estudiantes.filter(s => s.codigoSede === sedeCode);
+      const procesosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <h2 class="text-base font-extrabold text-slate-900 mb-1">Módulo Tutor Aula — Notificaciones Recibidas</h2>
-            <p class="text-xs text-slate-500 mb-4">Al registrar la salida del estudiante se completa y cierra el flujo del día.</p>
+            <h2 class="text-base font-extrabold text-slate-900 mb-1">Módulo Tutor Aula — ${sedeCfg.nombreSede}</h2>
+            <p class="text-xs text-slate-500 mb-4">Notificaciones recibidas en la sede para registrar salida y cerrar el flujo.</p>
 
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
-                    <th class="px-3 py-2.5">Estudiante</th>
-                    <th class="px-3 py-2.5">Grado / Sección</th>
-                    <th class="px-3 py-2.5">Origen (Proceso A / B)</th>
+                    <th class="px-3 py-2.5">Nombre Alumno</th>
+                    <th class="px-3 py-2.5">Grado</th>
+                    <th class="px-3 py-2.5">Aula</th>
+                    <th class="px-3 py-2.5">Origen</th>
                     <th class="px-3 py-2.5">Hora Notif.</th>
                     <th class="px-3 py-2.5 text-right">Cierre del Flujo</th>
                   </tr>
@@ -780,7 +972,8 @@
                   ${pendientesAula.length ? pendientesAula.map(a => `
                     <tr>
                       <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
-                      <td class="px-3 py-2.5 text-slate-700">${a.nivel} &bull; ${a.gradoSeccion}</td>
+                      <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
+                      <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
                       <td class="px-3 py-2.5 text-slate-700">${a.procesoOrigen} <span class="text-[11px] block text-slate-500">${a.detalleOrigen}</span></td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaAccion2}</td>
                       <td class="px-3 py-2.5 text-right">
@@ -792,7 +985,7 @@
                     </tr>
                   `).join('') : `
                     <tr>
-                      <td colspan="5" class="px-4 py-8 text-center text-slate-400">No hay notificaciones pendientes en el Módulo Tutor Aula.</td>
+                      <td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay notificaciones pendientes en esta sede.</td>
                     </tr>
                   `}
                 </tbody>
@@ -801,32 +994,28 @@
           </div>
 
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <h3 class="text-sm font-extrabold text-slate-900 mb-3">Salidas Registradas — Fin del Flujo (${salidasHoy.length})</h3>
+            <h3 class="text-sm font-extrabold text-slate-900 mb-3">Tabla de Procesos Individual — ${sedeCfg.nombreSede}</h3>
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
+                    <th class="px-3 py-2">Nombre Alumno</th>
+                    <th class="px-3 py-2">Grado</th>
+                    <th class="px-3 py-2">Aula</th>
+                    <th class="px-3 py-2">Etapa</th>
                     <th class="px-3 py-2">Hora Salida</th>
-                    <th class="px-3 py-2">Estudiante</th>
-                    <th class="px-3 py-2">Grado / Sección</th>
-                    <th class="px-3 py-2">Origen</th>
-                    <th class="px-3 py-2">Estado</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                  ${salidasHoy.length ? salidasHoy.map(s => `
+                  ${procesosSede.map(p => `
                     <tr>
-                      <td class="px-3 py-2 font-mono text-slate-600">${s.horaSalidaAula}</td>
-                      <td class="px-3 py-2 font-semibold text-slate-800">${s.nombreAlumno}</td>
-                      <td class="px-3 py-2 text-slate-700">${s.gradoSeccion}</td>
-                      <td class="px-3 py-2 text-slate-600">${s.detalleOrigen}</td>
-                      <td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">FIN DEL FLUJO</span></td>
+                      <td class="px-3 py-2 font-bold text-slate-900">${p.nombreAlumno}</td>
+                      <td class="px-3 py-2 text-slate-700">${p.grado}</td>
+                      <td class="px-3 py-2 font-semibold text-blue-800">${p.aula}</td>
+                      <td class="px-3 py-2">${getEtapaBadge(p.etapaFlujo)}</td>
+                      <td class="px-3 py-2 font-mono text-slate-600">${p.horaSalidaAula}</td>
                     </tr>
-                  `).join('') : `
-                    <tr>
-                      <td colspan="5" class="px-4 py-6 text-center text-slate-400">Aún no se registran salidas hoy.</td>
-                    </tr>
-                  `}
+                  `).join('')}
                 </tbody>
               </table>
             </div>
@@ -839,62 +1028,22 @@
       });
     }
 
-    // =========================================================================
-    // 6. SEDES, GRADOS DISPONIBLES, MOVILIDADES Y EXPLORADOR DE TABLAS
-    // =========================================================================
     function renderMobilityAndGradesSetup(container) {
-      const defaultSede = SEDES_Y_GRADOS[0].codigoSede;
+      const sedeCode = getActiveSedeCode();
+      const sedeCfg = getSedeConfig(sedeCode);
+      const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
+      const movsSede = appState.tbl_movilidades.filter(m => m.codigoSede === sedeCode);
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
-          <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div>
-                <h2 class="text-base font-extrabold text-slate-900">Sedes y Grados Disponibles</h2>
-                <p class="text-xs text-slate-500">Niveles y grados/secciones habilitados por sede para asignar alumnos y movilidades.</p>
-              </div>
-              <button type="button" id="btnRecreateInView" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow">
-                Crear Tablas Nuevamente
-              </button>
-            </div>
-            <div class="overflow-x-auto border border-slate-200 rounded-xl">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                  <tr>
-                    <th class="px-3.5 py-2.5">Sede</th>
-                    <th class="px-3.5 py-2.5">Niveles</th>
-                    <th class="px-3.5 py-2.5">Grados Disponibles</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                  ${SEDES_Y_GRADOS.map(s => `
-                    <tr>
-                      <td class="px-3.5 py-2.5 font-bold text-slate-900">${s.nombreSede} <span class="text-[10px] text-slate-400">(${s.codigoSede})</span></td>
-                      <td class="px-3.5 py-2.5 font-semibold text-blue-800">${s.niveles.join(' y ')}</td>
-                      <td class="px-3.5 py-2.5 text-slate-700">${s.grados.join(' • ')}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          ${renderAdminSedeSelectorHtml()}
 
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm h-fit">
-              <h2 class="text-base font-extrabold text-slate-900 mb-1">Registrar Servicio de Movilidad</h2>
-              <p class="text-xs text-slate-500 mb-4">Filtra por sede y muestra únicamente los grados disponibles en esa sede.</p>
+              <h2 class="text-base font-extrabold text-slate-900 mb-1">Movilidad — ${sedeCfg.nombreSede}</h2>
+              <p class="text-xs text-slate-500 mb-4">Asigna alumnos de ${sedeCfg.nombreSede} indicando grado y aula.</p>
 
               <form id="newMovForm" class="space-y-3.5">
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1">Sede</label>
-                  <select id="newMovSede" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
-                    ${SEDES_Y_GRADOS.map(s => `<option value="${s.codigoSede}">${s.nombreSede} (${s.codigoSede})</option>`).join('')}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1">Grados Disponibles en la Sede</label>
-                  <select id="newMovGradeFilter" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold"></select>
-                </div>
                 <div>
                   <label class="block text-xs font-bold text-slate-700 mb-1">Nombre de Movilidad</label>
                   <input id="newMovName" type="text" required placeholder="Ej. Movilidad Escolar Roja #03"
@@ -913,28 +1062,54 @@
                   </div>
                 </div>
                 <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1">Alumnos Asignados</label>
-                  <div id="newMovChecks" class="max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 bg-slate-50"></div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Alumnos de ${sedeCfg.codigoSede}</label>
+                  <div class="max-h-40 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 bg-slate-50">
+                    ${alumnosSede.length ? alumnosSede.map(a => `
+                      <label class="flex items-center justify-between text-xs bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer">
+                        <span class="flex items-center gap-2">
+                          <input type="checkbox" name="chkAlumnoMov" value="${a.codigoAlumno}" />
+                          <strong>${a.nombreAlumno}</strong>
+                        </span>
+                        <span class="text-[10px] text-slate-500">${a.grado} &bull; ${a.aula}</span>
+                      </label>
+                    `).join('') : `<p class="text-[11px] text-slate-400 p-2">No hay alumnos cargados en esta sede.</p>`}
+                  </div>
                 </div>
                 <button type="submit" class="w-full py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow">
-                  Guardar en tbl_movilidades
+                  Guardar Movilidad en ${sedeCfg.codigoSede}
                 </button>
               </form>
             </div>
 
             <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <h2 class="text-base font-extrabold text-slate-900 mb-3">Tabla: tbl_movilidades</h2>
+              <h2 class="text-base font-extrabold text-slate-900 mb-3">Movilidades Registradas — ${sedeCfg.nombreSede}</h2>
               <div class="overflow-x-auto border border-slate-200 rounded-xl">
                 <table class="w-full text-left text-xs">
                   <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
-                      <th class="px-3 py-2.5">Sede / Movilidad</th>
+                      <th class="px-3 py-2.5">Movilidad</th>
                       <th class="px-3 py-2.5">Placa</th>
                       <th class="px-3 py-2.5">Alumnos</th>
-                      <th class="px-3 py-2.5">Grados y Secciones</th>
+                      <th class="px-3 py-2.5">Grados y Aulas</th>
                     </tr>
                   </thead>
-                  <tbody id="movListBody" class="divide-y divide-slate-100"></tbody>
+                  <tbody class="divide-y divide-slate-100">
+                    ${movsSede.length ? movsSede.map(m => {
+                      const count = appState.tbl_movilidad_alumnos.filter(x => x.idMovilidad === m.idMovilidad).length;
+                      return `
+                        <tr>
+                          <td class="px-3 py-2.5 font-bold text-slate-900">${m.nombreMovilidad}</td>
+                          <td class="px-3 py-2.5 font-mono text-slate-700">${m.placa}</td>
+                          <td class="px-3 py-2.5 font-bold text-teal-700">${count} / ${m.capacidadMaxima}</td>
+                          <td class="px-3 py-2.5 text-slate-700">${m.gradosSecciones}</td>
+                        </tr>
+                      `;
+                    }).join('') : `
+                      <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-slate-400">No hay movilidades registradas en esta sede.</td>
+                      </tr>
+                    `}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -942,61 +1117,10 @@
         </div>
       `;
 
-      document.getElementById('btnRecreateInView').addEventListener('click', recreateAllTablesNow);
-
-      const sedeSel = document.getElementById('newMovSede');
-      const gradeSel = document.getElementById('newMovGradeFilter');
-      sedeSel.value = defaultSede;
-
-      const syncGradeOptionsAndChecks = () => {
-        const cfg = getSedeConfig(sedeSel.value);
-        const currentGrade = gradeSel.value;
-        gradeSel.innerHTML = `<option value="TODOS">Todos los grados de ${cfg.codigoSede}</option>` +
-          cfg.grados.map(g => `<option value="${g}">${g}</option>`).join('');
-        if (currentGrade && (currentGrade === 'TODOS' || cfg.grados.includes(currentGrade))) {
-          gradeSel.value = currentGrade;
-        }
-
-        const list = appState.tbl_alumnos.filter(a => {
-          if (a.codigoSede !== sedeSel.value) return false;
-          if (gradeSel.value && gradeSel.value !== 'TODOS') return a.gradoSeccion === gradeSel.value;
-          return true;
-        });
-
-        document.getElementById('newMovChecks').innerHTML = list.length ? list.map(a => `
-          <label class="flex items-center justify-between text-xs bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer">
-            <span class="flex items-center gap-2">
-              <input type="checkbox" name="chkAlumnoMov" value="${a.codigoAlumno}" />
-              <strong>${a.nombreAlumno}</strong>
-            </span>
-            <span class="text-[10px] text-slate-500">${a.nivel} &bull; ${a.gradoSeccion}</span>
-          </label>
-        `).join('') : `<p class="text-[11px] text-slate-400 p-2">No hay alumnos registrados para este grado en la sede seleccionada.</p>`;
-      };
-
-      const renderMovs = () => {
-        document.getElementById('movListBody').innerHTML = appState.tbl_movilidades.map(m => {
-          const count = appState.tbl_movilidad_alumnos.filter(x => x.idMovilidad === m.idMovilidad).length;
-          return `
-            <tr>
-              <td class="px-3 py-2.5 font-bold text-slate-900">${m.nombreMovilidad} <span class="text-[10px] block text-slate-400">${getSedeConfig(m.codigoSede).nombreSede} (${m.codigoSede})</span></td>
-              <td class="px-3 py-2.5 font-mono text-slate-700">${m.placa}</td>
-              <td class="px-3 py-2.5 font-bold text-teal-700">${count} / ${m.capacidadMaxima}</td>
-              <td class="px-3 py-2.5 text-slate-700">${m.gradosSecciones}</td>
-            </tr>
-          `;
-        }).join('');
-      };
-
-      syncGradeOptionsAndChecks();
-      renderMovs();
-      sedeSel.addEventListener('change', syncGradeOptionsAndChecks);
-      gradeSel.addEventListener('change', syncGradeOptionsAndChecks);
+      bindAdminSedeSelector(container);
 
       document.getElementById('newMovForm').addEventListener('submit', e => {
         e.preventDefault();
-        const code = sedeSel.value;
-        const cfg = getSedeConfig(code);
         const cap = Number(document.getElementById('newMovCap').value);
         const selected = Array.from(document.querySelectorAll('input[name="chkAlumnoMov"]:checked')).map(i => i.value);
         if (!selected.length) {
@@ -1009,13 +1133,13 @@
         }
 
         const idMov = `MOV-${Date.now()}`;
-        const alumnosRel = appState.tbl_alumnos.filter(a => a.codigoSede === code && selected.includes(a.codigoAlumno));
-        const gradosSecciones = Array.from(new Set(alumnosRel.map(a => `${a.nivel} - ${a.gradoSeccion}`))).join(' | ');
+        const alumnosRel = alumnosSede.filter(a => selected.includes(a.codigoAlumno));
+        const gradosSecciones = Array.from(new Set(alumnosRel.map(a => `${a.grado} (${a.aula})`))).join(' | ');
 
         const newMov = {
           idMovilidad: idMov,
-          codigoSede: code,
-          nombreSede: cfg.nombreSede,
+          codigoSede: sedeCode,
+          nombreSede: sedeCfg.nombreSede,
           nombreMovilidad: document.getElementById('newMovName').value.trim(),
           placa: document.getElementById('newMovPlate').value.trim().toUpperCase(),
           conductor: 'Asignado',
@@ -1028,74 +1152,19 @@
         alumnosRel.forEach(a => {
           appState.tbl_movilidad_alumnos.push({
             idMovilidad: idMov,
-            codigoSede: code,
+            codigoSede: sedeCode,
             codigoAlumno: a.codigoAlumno,
             nombreAlumno: a.nombreAlumno,
-            nivel: a.nivel,
-            gradoSeccion: a.gradoSeccion
+            grado: a.grado,
+            aula: a.aula
           });
         });
 
         saveState();
         syncTableEvent('UPSERT_MOVILIDAD', { mobility: newMov });
-        document.getElementById('newMovForm').reset();
-        sedeSel.value = code;
-        syncGradeOptionsAndChecks();
-        renderMovs();
-        showToast(`Movilidad guardada en ${cfg.nombreSede}.`);
+        renderCurrentTab();
+        showToast(`Movilidad guardada en ${sedeCfg.nombreSede}.`);
       });
-    }
-
-    function renderTablesExplorer(container) {
-      const renderTableCard = (tableName, rows) => {
-        if (!rows || !rows.length) {
-          return `
-            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-              <h3 class="text-sm font-extrabold text-slate-900 mb-1">${tableName}</h3>
-              <p class="text-xs text-slate-400">Sin registros aún.</p>
-            </div>
-          `;
-        }
-        const cols = Object.keys(rows[0]);
-        return `
-          <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <div class="flex items-center justify-between mb-3">
-              <h3 class="text-sm font-extrabold text-slate-900">${tableName}</h3>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">${rows.length} fila(s)</span>
-            </div>
-            <div class="overflow-x-auto border border-slate-200 rounded-xl">
-              <table class="w-full text-left text-xs">
-                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                  <tr>${cols.map(c => `<th class="px-3 py-2 whitespace-nowrap">${c}</th>`).join('')}</tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                  ${rows.map(r => `
-                    <tr>${cols.map(c => `<td class="px-3 py-2 whitespace-nowrap text-slate-700">${r[c] ?? '—'}</td>`).join('')}</tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        `;
-      };
-
-      container.innerHTML = `
-        <div class="space-y-6 fade-in">
-          <div class="flex justify-end">
-            <button type="button" id="btnRecreateTablesTop" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow">
-              Crear Tablas Nuevamente
-            </button>
-          </div>
-          ${renderTableCard(TABLES.PERFILES_ACCESO, appState.tbl_perfiles_acceso)}
-          ${renderTableCard(TABLES.SEDES_NIVELES, appState.tbl_sedes_niveles)}
-          ${renderTableCard(TABLES.ALUMNOS, appState.tbl_alumnos)}
-          ${renderTableCard(TABLES.MOVILIDADES, appState.tbl_movilidades)}
-          ${renderTableCard(TABLES.MOVILIDAD_ALUMNOS, appState.tbl_movilidad_alumnos)}
-          ${renderTableCard(TABLES.NOTIFICACIONES_AULA, appState.tbl_notificaciones_aula)}
-          ${renderTableCard(TABLES.SALIDAS_ESTUDIANTES, appState.tbl_salidas_estudiantes)}
-        </div>
-      `;
-      document.getElementById('btnRecreateTablesTop').addEventListener('click', recreateAllTablesNow);
     }
   </script>
 </body>
