@@ -2647,6 +2647,285 @@
         dayLogs
       };
     }
+
+    // =========================================================================
+    // MÓDULO DE SERVICIO DE MOVILIDAD Y FLUJO (PUERTA -> AULA)
+    // =========================================================================
+    function ensureMobilityState(stateObj) {
+      if (!Array.isArray(stateObj.mobilities)) {
+        stateObj.mobilities = [];
+      }
+      if (!Array.isArray(stateObj.dailyExits)) {
+        stateObj.dailyExits = [];
+      }
+    }
+
+    function getMobilityGradesAndSections(sedeCode, alumnoCodes) {
+      const codeSet = new Set(alumnoCodes || []);
+      const assigned = appState.students.filter(
+        s => s.codigoSede === sedeCode && codeSet.has(s.codigoAlumno)
+      );
+      const uniqueGroups = Array.from(
+        new Set(assigned.map(s => `${s.nivel} - ${s.aula}`.trim()).filter(Boolean))
+      );
+      return {
+        students: assigned,
+        summary: uniqueGroups.length ? uniqueGroups.join(' | ') : 'Sin grados/secciones asignados'
+      };
+    }
+
+    // ADMIN: Sección para crear/editar Servicio de Movilidad y asignar alumnos
+    function renderAdminMobilities(container) {
+      ensureMobilityState(appState);
+      const defaultSede = SEDES_ALFABETICAS[0].code;
+
+      container.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 h-fit">
+            <h2 class="text-base font-extrabold text-slate-900 mb-1">Agregar Servicio de Movilidad</h2>
+            <p class="text-xs text-slate-500 mb-4">Registre la movilidad e incluya los alumnos que trasladará.</p>
+
+            <form id="mobilityForm" class="space-y-3.5">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Sede</label>
+                <select id="movSedeSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
+                  ${SEDES_ALFABETICAS.map(s => `<option value="${s.code}">${s.shortName} (${s.code})</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Nombre / Código de Movilidad</label>
+                <input id="movName" type="text" required placeholder="Ej. Movilidad Escolar San Cristóbal #04"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Placa</label>
+                  <input id="movPlate" type="text" required placeholder="ABC-123"
+                    class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Cantidad Máx. Alumnos</label>
+                  <input id="movCapacity" type="number" min="1" max="60" value="15" required
+                    class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Conductor / Responsable</label>
+                <input id="movDriver" type="text" required placeholder="Nombre del conductor"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Seleccionar Alumnos de la Sede</label>
+                <div id="movStudentsChecklist" class="max-h-44 overflow-y-auto border border-slate-200 rounded-xl p-2.5 space-y-1.5 bg-slate-50"></div>
+              </div>
+              <button type="submit" class="w-full py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow">
+                Guardar Servicio de Movilidad
+              </button>
+            </form>
+          </div>
+
+          <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h2 class="text-base font-extrabold text-slate-900 mb-1">Servicios de Movilidad Registrados</h2>
+            <p class="text-xs text-slate-500 mb-4">Incluye cantidad de alumnos asignados y grados/secciones involucrados.</p>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="px-3.5 py-2.5">Sede / Movilidad</th>
+                    <th class="px-3.5 py-2.5">Placa / Conductor</th>
+                    <th class="px-3.5 py-2.5">Alumnos</th>
+                    <th class="px-3.5 py-2.5">Grados y Secciones</th>
+                  </tr>
+                </thead>
+                <tbody id="mobilitiesTableBody" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const sedeSel = document.getElementById('movSedeSelect');
+      sedeSel.value = defaultSede;
+
+      const paintStudentChecks = () => {
+        const code = sedeSel.value;
+        const list = appState.students.filter(s => s.codigoSede === code);
+        const box = document.getElementById('movStudentsChecklist');
+        if (!list.length) {
+          box.innerHTML = `<p class="text-[11px] text-slate-400">No hay alumnos registrados en esta sede.</p>`;
+          return;
+        }
+        box.innerHTML = list.map(s => `
+          <label class="flex items-center justify-between gap-2 text-xs bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer">
+            <span class="flex items-center gap-2">
+              <input type="checkbox" name="movStudentCheck" value="${s.codigoAlumno}" class="rounded text-teal-600" />
+              <strong class="text-slate-800">${s.estudiante}</strong>
+            </span>
+            <span class="text-[10px] font-semibold text-slate-500">${s.nivel} • ${s.aula}</span>
+          </label>
+        `).join('');
+      };
+
+      const paintMobilitiesTable = () => {
+        const tbody = document.getElementById('mobilitiesTableBody');
+        tbody.innerHTML = appState.mobilities.length ? appState.mobilities.map(m => {
+          const sInfo = getSedeInfo(m.codigoSede);
+          const count = (m.alumnoCodes || []).length;
+          return `
+            <tr>
+              <td class="px-3.5 py-2.5"><strong class="text-slate-900">${m.nombre}</strong><div class="text-[10px] text-slate-500">${sInfo.shortName} (${m.codigoSede})</div></td>
+              <td class="px-3.5 py-2.5 font-mono text-[11px] text-slate-700">${m.placa}<div class="font-sans text-[10px] text-slate-500">${m.conductor}</div></td>
+              <td class="px-3.5 py-2.5 font-bold text-teal-700">${count} / ${m.capacidad}</td>
+              <td class="px-3.5 py-2.5 text-slate-700">${m.gradosSecciones}</td>
+            </tr>
+          `;
+        }).join('') : `<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">Aún no hay servicios de movilidad registrados.</td></tr>`;
+      };
+
+      paintStudentChecks();
+      paintMobilitiesTable();
+      sedeSel.addEventListener('change', paintStudentChecks);
+
+      document.getElementById('mobilityForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const code = sedeSel.value;
+        const sObj = SEDE_MAP[code];
+        const capacity = Number(document.getElementById('movCapacity').value);
+        const selectedCodes = Array.from(document.querySelectorAll('input[name="movStudentCheck"]:checked')).map(i => i.value);
+
+        if (!selectedCodes.length) {
+          showToast('Seleccione al menos un alumno para el servicio de movilidad.');
+          return;
+        }
+        if (selectedCodes.length > capacity) {
+          showToast(`Seleccionó ${selectedCodes.length} alumnos, supera la capacidad de ${capacity}.`);
+          return;
+        }
+
+        const info = getMobilityGradesAndSections(code, selectedCodes);
+        const mobilityObj = {
+          id: `MOV-${Date.now()}`,
+          codigoSede: code,
+          sedeNombre: sObj.name,
+          nombre: document.getElementById('movName').value.trim(),
+          placa: document.getElementById('movPlate').value.trim().toUpperCase(),
+          conductor: document.getElementById('movDriver').value.trim(),
+          telefono: '—',
+          capacidad,
+          alumnoCodes: selectedCodes,
+          gradosSecciones: info.summary,
+          estado: 'ACTIVA'
+        };
+
+        appState.mobilities.unshift(mobilityObj);
+        appState.students.forEach(st => {
+          if (st.codigoSede === code && selectedCodes.includes(st.codigoAlumno)) {
+            st.movilidadId = mobilityObj.id;
+            st.movilidadNombre = mobilityObj.nombre;
+          }
+        });
+
+        saveState();
+        pushToGoogleSheets('UPSERT_MOBILITY', { mobility: mobilityObj });
+        document.getElementById('mobilityForm').reset();
+        sedeSel.value = code;
+        paintStudentChecks();
+        paintMobilitiesTable();
+        showToast(`Movilidad "${mobilityObj.nombre}" registrada con ${selectedCodes.length} alumnos.`);
+      });
+    }
+
+    // TUTOR EN PUERTA: Notifica al Tutor de Aula (por Papá/Familiar o por Movilidad con grados y secciones)
+    function gateNotifyMobilityToClassroom(mobilityId) {
+      const mov = (appState.mobilities || []).find(m => m.id === mobilityId && m.codigoSede === currentUser.codigoSede);
+      if (!mov) return;
+
+      const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const today = getTodayDateISO();
+      const codeSet = new Set(mov.alumnoCodes || []);
+      const targetStudents = appState.students.filter(s => s.codigoSede === currentUser.codigoSede && codeSet.has(s.codigoAlumno));
+      const events = [];
+
+      targetStudents.forEach(st => {
+        st.estado = FLOW_STATES.NOTIFICADO;
+        st.tipoRecojo = 'MOVILIDAD';
+        st.movilidadId = mov.id;
+        st.movilidadNombre = mov.nombre;
+        st.quienRecogio = `Movilidad: ${mov.nombre} (${mov.placa})`;
+        st.dniFamiliar = mov.conductor;
+        st.horaNotificacionPuerta = nowTime;
+        st.fechaActualizacion = today;
+
+        const ev = {
+          id: `EVT-${Date.now()}-${st.codigoAlumno}`,
+          fecha: today,
+          hora: nowTime,
+          codigoSede: st.codigoSede,
+          sedeNombre: st.sedeNombre,
+          tipoRecojo: 'MOVILIDAD',
+          idMovilidad: mov.id,
+          nombreMovilidad: mov.nombre,
+          gradosSecciones: mov.gradosSecciones,
+          codigoAlumno: st.codigoAlumno,
+          estudiante: st.estudiante,
+          nivel: st.nivel,
+          aula: st.aula,
+          quienRecogio: st.quienRecogio,
+          dniFamiliar: st.dniFamiliar,
+          estadoProceso: 'NOTIFICADO_A_AULA',
+          tutorPuerta: currentUser.nombre,
+          tutorAula: st.tutor,
+          studentSnapshot: { ...st }
+        };
+        appState.dailyExits.unshift(ev);
+        events.push(ev);
+      });
+
+      saveState();
+      pushToGoogleSheets('RECORD_DAILY_EXIT', { events });
+      renderActiveTab();
+      showToast(`Notificada movilidad "${mov.nombre}" (${mov.gradosSecciones}) al tutor de aula.`);
+    }
+
+    // TUTOR DE AULA: Indica en el sistema la salida del estudiante
+    function classroomConfirmStudentExit(codigoAlumno) {
+      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno && s.codigoSede === currentUser.codigoSede);
+      if (!st) return;
+
+      const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const today = getTodayDateISO();
+      st.estado = FLOW_STATES.RETIRADO;
+      st.horaSalidaAula = nowTime;
+      st.fechaActualizacion = today;
+
+      const ev = {
+        id: `EVT-${Date.now()}-${st.codigoAlumno}`,
+        fecha: today,
+        hora: nowTime,
+        codigoSede: st.codigoSede,
+        sedeNombre: st.sedeNombre,
+        tipoRecojo: st.tipoRecojo || 'FAMILIAR',
+        idMovilidad: st.movilidadId || '—',
+        nombreMovilidad: st.movilidadNombre || '—',
+        gradosSecciones: `${st.nivel} - ${st.aula}`,
+        codigoAlumno: st.codigoAlumno,
+        estudiante: st.estudiante,
+        nivel: st.nivel,
+        aula: st.aula,
+        quienRecogio: st.quienRecogio || 'Papá / Familiar',
+        dniFamiliar: st.dniFamiliar || '—',
+        estadoProceso: 'SALIDA_CONFIRMADA_AULA',
+        tutorPuerta: st.tutorPuerta || '—',
+        tutorAula: currentUser.nombre,
+        studentSnapshot: { ...st }
+      };
+
+      appState.dailyExits.unshift(ev);
+      saveState();
+      pushToGoogleSheets('RECORD_DAILY_EXIT', { events: [ev] });
+      renderActiveTab();
+      showToast(`Salida registrada para ${st.estudiante} (${st.nivel} - ${st.aula}).`);
+    }
   </script>
 </body>
 </html>
