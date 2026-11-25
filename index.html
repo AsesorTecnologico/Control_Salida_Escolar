@@ -2424,6 +2424,90 @@
     }
 
     syncAllFromGoogleSheets(true);
+
+
+    function getTodayDateISO() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    let selectedOperationalDate = getTodayDateISO();
+    let autoSyncTimerId = null;
+
+    function buildDefaultSchedules() {
+      const map = {};
+      SEDES_OFICIALES.forEach((s) => {
+        const hasInicial = s.niveles.includes('Inicial');
+        map[s.code] = {
+          ingresoInicial: hasInicial ? '08:00' : '—',
+          salidaInicial: hasInicial ? '13:00' : '—',
+          ingresoPrimaria: '07:45',
+          salidaPrimaria: '14:30'
+        };
+      });
+      return map;
+    }
+
+    function ensureSchedulesState(stateObj) {
+      const defs = buildDefaultSchedules();
+      if (!stateObj.schedules || typeof stateObj.schedules !== 'object') {
+        stateObj.schedules = defs;
+        return;
+      }
+      SEDES_OFICIALES.forEach((s) => {
+        const cur = stateObj.schedules[s.code] || {};
+        const hasInicial = s.niveles.includes('Inicial');
+        stateObj.schedules[s.code] = {
+          ingresoInicial: hasInicial ? (cur.ingresoInicial || defs[s.code].ingresoInicial) : '—',
+          salidaInicial: hasInicial ? (cur.salidaInicial || defs[s.code].salidaInicial) : '—',
+          ingresoPrimaria: cur.ingresoPrimaria || defs[s.code].ingresoPrimaria,
+          salidaPrimaria: cur.salidaPrimaria || defs[s.code].salidaPrimaria
+        };
+      });
+    }
+
+    function getSedeOfficialTimes(code, nivel) {
+      const sc = (appState.schedules && appState.schedules[code]) || buildDefaultSchedules()[code] || {};
+      if (nivel === 'Inicial') {
+        return {
+          ingreso: sc.ingresoInicial && sc.ingresoInicial !== '—' ? sc.ingresoInicial : '08:00',
+          salida: sc.salidaInicial && sc.salidaInicial !== '—' ? sc.salidaInicial : '13:00'
+        };
+      }
+      return {
+        ingreso: sc.ingresoPrimaria || '07:45',
+        salida: sc.salidaPrimaria || '14:30'
+      };
+    }
+
+    function startAutoSyncLoop() {
+      stopAutoSyncLoop();
+      autoSyncTimerId = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          syncAllFromGoogleSheets(true);
+        }
+      }, 12000);
+    }
+
+    function stopAutoSyncLoop() {
+      if (autoSyncTimerId) {
+        clearInterval(autoSyncTimerId);
+        autoSyncTimerId = null;
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        syncAllFromGoogleSheets(true);
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      syncAllFromGoogleSheets(true);
+    });
   </script>
 </body>
 </html>
