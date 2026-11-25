@@ -138,7 +138,11 @@
         </div>
 
         <div class="flex items-center gap-2 sm:gap-3">
-          <button id="syncNowBtn" type="button" title="Sincronizar estado interno"
+          <span class="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 text-[11px] font-semibold">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            Auto-Sync Activo
+          </span>
+          <button id="syncNowBtn" type="button" title="Forzar sincronización inmediata"
             class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition">
             <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             <span class="hidden sm:inline">Sincronizar</span>
@@ -315,22 +319,19 @@
         TUTORES: 'Tutores_Asignados',
         ALUMNOS: 'Lista_Alumnos_Sedes',
         PERFILES: 'Perfiles_Acceso',
-        AUDITORIA: 'Historial_Auditoria'
+        AUDITORIA: 'Historial_Auditoria',
+        HORARIOS: 'Horarios_Sedes'
       })
     });
 
-    const STORAGE_KEY = 'aulasalida_smart_flow_v10';
+    const STORAGE_KEY = 'aulasalida_smart_flow_v11';
     const LEGACY_STORAGE_KEYS = [
+      'aulasalida_smart_flow_v10',
       'aulasalida_smart_48_sedes_v9',
       'aulasalida_smart_48_sedes_v8',
       'aulasalida_smart_48_sedes_v7'
     ];
 
-    // Estados oficiales del flujo de 3 pasos sobre alumnos registrados:
-    // 0: 'EN AULA'
-    // 1: 'NOTIFICADO EN PUERTA' (Policía notificó llegada de familiar al tutor)
-    // 2: 'SALIENDO DEL AULA' (Tutor informó que el alumno está saliendo del aula)
-    // 3: 'RETIRADO' (Policía confirmó que el alumno se retiró con quien lo recogió)
     const FLOW_STATES = Object.freeze({
       EN_AULA: 'EN AULA',
       NOTIFICADO: 'NOTIFICADO EN PUERTA',
@@ -344,6 +345,14 @@
       if (s.includes('SALIENDO') || s.includes('RETIRANDO')) return FLOW_STATES.SALIENDO;
       if (s.includes('NOTIFICADO') || s.includes('PUERTA') || s.includes('ALERTA')) return FLOW_STATES.NOTIFICADO;
       return FLOW_STATES.EN_AULA;
+    }
+
+    function getTodayDateISO() {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     }
 
     function sha256(ascii) {
@@ -466,6 +475,52 @@
       return SEDE_MAP[code] || { code, name: code, niveles: ['Primaria'], nivelesLabel: 'Solo Primaria' };
     }
 
+    function buildDefaultSchedules() {
+      const map = {};
+      SEDES_OFICIALES.forEach((s) => {
+        const hasInicial = s.niveles.includes('Inicial');
+        map[s.code] = {
+          ingresoInicial: hasInicial ? '08:00' : '—',
+          salidaInicial: hasInicial ? '13:00' : '—',
+          ingresoPrimaria: '07:45',
+          salidaPrimaria: '14:30'
+        };
+      });
+      return map;
+    }
+
+    function ensureSchedulesState(stateObj) {
+      const defs = buildDefaultSchedules();
+      if (!stateObj.schedules || typeof stateObj.schedules !== 'object') {
+        stateObj.schedules = defs;
+        return;
+      }
+      SEDES_OFICIALES.forEach((s) => {
+        const cur = stateObj.schedules[s.code] || {};
+        const hasInicial = s.niveles.includes('Inicial');
+        stateObj.schedules[s.code] = {
+          ingresoInicial: hasInicial ? (cur.ingresoInicial || defs[s.code].ingresoInicial) : '—',
+          salidaInicial: hasInicial ? (cur.salidaInicial || defs[s.code].salidaInicial) : '—',
+          ingresoPrimaria: cur.ingresoPrimaria || defs[s.code].ingresoPrimaria,
+          salidaPrimaria: cur.salidaPrimaria || defs[s.code].salidaPrimaria
+        };
+      });
+    }
+
+    function getSedeOfficialTimes(code, nivel) {
+      const sc = (appState && appState.schedules && appState.schedules[code]) || buildDefaultSchedules()[code] || {};
+      if (nivel === 'Inicial') {
+        return {
+          ingreso: sc.ingresoInicial && sc.ingresoInicial !== '—' ? sc.ingresoInicial : '08:00',
+          salida: sc.salidaInicial && sc.salidaInicial !== '—' ? sc.salidaInicial : '13:00'
+        };
+      }
+      return {
+        ingreso: sc.ingresoPrimaria || '07:45',
+        salida: sc.salidaPrimaria || '14:30'
+      };
+    }
+
     function buildDefaultAccounts() {
       const list = [
         {
@@ -577,12 +632,12 @@
       const hasInicial = s.niveles.includes('Inicial');
       const base = hasInicial
         ? [
-            ['Sebastián Quispe Huamán', 'Inicial', 'Inicial 4 Años "A"', '13:00', FLOW_STATES.RETIRADO, 'Madre - Carmen Huamán', '41000000', '12:58', '13:02', '13:05'],
-            ['Camila Salazar Méndez', 'Primaria', '3° Primaria "A"', '14:30', FLOW_STATES.EN_AULA, '—', '—', '—', '—', '—']
+            ['Sebastián Quispe Huamán', 'Inicial', 'Inicial 4 Años "A"', '08:00', '13:00', FLOW_STATES.EN_AULA, '—', '41000000', '—', '—', '—'],
+            ['Camila Salazar Méndez', 'Primaria', '3° Primaria "A"', '07:45', '14:30', FLOW_STATES.EN_AULA, '—', '42000000', '—', '—', '—']
           ]
         : [
-            ['Mateo Paredes Rojas', 'Primaria', '3° Primaria "A"', '14:30', FLOW_STATES.EN_AULA, '—', '—', '—', '—', '—'],
-            ['Valeria Cárdenas Soto', 'Primaria', '5° Primaria "A"', '14:30', FLOW_STATES.EN_AULA, '—', '—', '—', '—', '—']
+            ['Mateo Paredes Rojas', 'Primaria', '3° Primaria "A"', '07:45', '14:30', FLOW_STATES.EN_AULA, '—', '43000000', '—', '—', '—'],
+            ['Valeria Cárdenas Soto', 'Primaria', '5° Primaria "A"', '07:45', '14:30', FLOW_STATES.EN_AULA, '—', '44000000', '—', '—', '—']
           ];
 
       return base.map((b, i) => ({
@@ -594,15 +649,16 @@
         aula: b[2],
         tutor: i === 1 ? s.tut2 : s.tut1,
         policia: s.pol,
-        salidaOficial: b[3],
-        estado: b[4],
-        quienRecogio: b[5],
-        dniFamiliar: b[6],
-        horaNotificacionPolicia: b[7],
-        horaSalidaAulaTutor: b[8],
-        horaRetiroConfirmado: b[9],
-        puntualidad: b[4] === FLOW_STATES.RETIRADO ? '✅ Retirado y verificado' : '🕒 En aula',
-        validacionAdmin: idx === 0 && i === 0 ? 'VALIDADO' : 'PENDIENTE',
+        ingresoOficial: b[3],
+        salidaOficial: b[4],
+        estado: b[5],
+        quienRecogio: b[6],
+        dniFamiliar: b[7],
+        horaNotificacionPolicia: b[8],
+        horaSalidaAulaTutor: b[9],
+        horaRetiroConfirmado: b[10],
+        puntualidad: '🕒 En aula',
+        validacionAdmin: 'PENDIENTE',
         telefonoApoderado: `+51 98${(idx % 9) + 1} 10${idx} 20${i}`
       }));
     }
@@ -616,8 +672,10 @@
     }
 
     // =========================================================================
-    // 3. ESTADO GLOBAL Y NORMALIZACIÓN
+    // 3. ESTADO GLOBAL, REGISTRO DIARIO POR FECHA Y NORMALIZACIÓN
     // =========================================================================
+    let selectedOperationalDate = getTodayDateISO();
+    let autoSyncTimerId = null;
     let appState = loadState();
     let currentUser = null;
     let pendingForceUser = null;
@@ -681,23 +739,30 @@
 
     function normalizeStateToOfficialSedes(stateObj) {
       stateObj.accounts = syncOfficialAccountsCatalog(stateObj.accounts);
+      ensureSchedulesState(stateObj);
 
       stateObj.students = (stateObj.students || []).filter(st => SEDE_MAP[st.codigoSede]);
       stateObj.students.forEach(st => {
         const sObj = SEDE_MAP[st.codigoSede];
+        const times = getSedeOfficialTimes(st.codigoSede, st.nivel);
         st.sedeNombre = sObj.name;
         st.estado = normalizeFlowState(st.estado);
+        st.ingresoOficial = st.ingresoOficial || times.ingreso;
+        st.salidaOficial = st.salidaOficial || times.salida;
         st.horaNotificacionPolicia = st.horaNotificacionPolicia || st.horaPuerta || '—';
         st.horaSalidaAulaTutor = st.horaSalidaAulaTutor || '—';
         st.horaRetiroConfirmado = st.horaRetiroConfirmado || st.horaSalidaTutor || '—';
         if (!sObj.niveles.includes('Inicial') && st.nivel === 'Inicial') {
           st.nivel = 'Primaria';
-          st.salidaOficial = '14:30';
+          st.salidaOficial = times.salida;
         }
       });
 
       if (!Array.isArray(stateObj.bitacora)) stateObj.bitacora = [];
       if (!Array.isArray(stateObj.auditLogs)) stateObj.auditLogs = [];
+      if (!stateObj.dailyRecords || typeof stateObj.dailyRecords !== 'object') {
+        stateObj.dailyRecords = {};
+      }
       return stateObj;
     }
 
@@ -720,19 +785,22 @@
       const initial = {
         accounts: buildDefaultAccounts(),
         students: buildDefaultStudents(),
+        schedules: buildDefaultSchedules(),
+        dailyRecords: {},
         bitacora: [],
         auditLogs: [
           {
             id: 'AUD-001',
             fecha: new Date().toLocaleString('es-PE'),
             usuario: 'admin.general',
-            accion: 'FLUJO SECUENCIAL 3 PASOS ACTIVADO',
+            accion: 'FLUJO SECUENCIAL 3 PASOS + REGISTRO DIARIO ACTIVADO',
             alcance: '48 Sedes Oficiales • 193 Cuentas',
-            detalle: 'Paso 1: Policía notifica al tutor • Paso 2: Tutor informa salida del aula • Paso 3: Policía confirma retiro.'
+            detalle: 'Registro diario por fecha con lista inicial de alumnos y conservación histórica.'
           }
         ],
         lastSync: null
       };
+      normalizeStateToOfficialSedes(initial);
       saveState(initial);
       return initial;
     }
@@ -741,8 +809,153 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateObj));
     }
 
+    // Crea o sincroniza la lista diaria de alumnos para una fecha dada (cada día inicia en EN AULA)
+    function ensureDailySnapshotForDate(dateISO = getTodayDateISO()) {
+      const targetDate = dateISO || getTodayDateISO();
+      if (!appState.dailyRecords || typeof appState.dailyRecords !== 'object') {
+        appState.dailyRecords = {};
+      }
+
+      const buildFreshDayRow = (baseSt) => {
+        const times = getSedeOfficialTimes(baseSt.codigoSede, baseSt.nivel);
+        return {
+          ...baseSt,
+          fechaRegistro: targetDate,
+          ingresoOficial: times.ingreso,
+          salidaOficial: times.salida,
+          estado: FLOW_STATES.EN_AULA,
+          quienRecogio: '—',
+          dniFamiliar: baseSt.dniFamiliar || '—',
+          horaNotificacionPolicia: '—',
+          horaSalidaAulaTutor: '—',
+          horaRetiroConfirmado: '—',
+          puntualidad: '🕒 En aula (Registro diario)'
+        };
+      };
+
+      if (!Array.isArray(appState.dailyRecords[targetDate])) {
+        appState.dailyRecords[targetDate] = (appState.students || []).map(buildFreshDayRow);
+        saveState();
+      } else {
+        const baseByCode = new Map((appState.students || []).map(s => [s.codigoAlumno, s]));
+        const currentList = appState.dailyRecords[targetDate];
+        const filtered = currentList.filter(item => baseByCode.has(item.codigoAlumno));
+        const existingCodes = new Set(filtered.map(item => item.codigoAlumno));
+
+        (appState.students || []).forEach((baseSt) => {
+          if (!existingCodes.has(baseSt.codigoAlumno)) {
+            filtered.push(buildFreshDayRow(baseSt));
+          } else {
+            const row = filtered.find(r => r.codigoAlumno === baseSt.codigoAlumno);
+            if (row) {
+              const times = getSedeOfficialTimes(baseSt.codigoSede, baseSt.nivel);
+              row.estudiante = baseSt.estudiante;
+              row.nivel = baseSt.nivel;
+              row.aula = baseSt.aula;
+              row.tutor = baseSt.tutor;
+              row.policia = baseSt.policia;
+              row.ingresoOficial = times.ingreso;
+              row.salidaOficial = times.salida;
+              row.telefonoApoderado = baseSt.telefonoApoderado;
+            }
+          }
+        });
+        appState.dailyRecords[targetDate] = filtered;
+      }
+
+      if (targetDate === getTodayDateISO()) {
+        appState.students = appState.dailyRecords[targetDate].map(item => ({ ...item }));
+      }
+
+      return appState.dailyRecords[targetDate];
+    }
+
+    function getStudentsForSedeAndDate(sedeCode, dateISO = selectedOperationalDate) {
+      const targetDate = dateISO || getTodayDateISO();
+      const dayList = ensureDailySnapshotForDate(targetDate);
+      if (!sedeCode || sedeCode === 'ALL' || sedeCode === 'ADMIN') {
+        return dayList;
+      }
+      return dayList.filter(s => s.codigoSede === sedeCode);
+    }
+
+    function getActiveDayStudent(codigoAlumno, sedeCode, dateISO = getTodayDateISO()) {
+      const list = ensureDailySnapshotForDate(dateISO);
+      return list.find(s => s.codigoAlumno === codigoAlumno && (!sedeCode || s.codigoSede === sedeCode));
+    }
+
+    function getAvailableHistoryDates() {
+      const set = new Set([getTodayDateISO()]);
+      if (appState.dailyRecords && typeof appState.dailyRecords === 'object') {
+        Object.keys(appState.dailyRecords).forEach(d => {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(d)) set.add(d);
+        });
+      }
+      (appState.bitacora || []).forEach(b => {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(b.fecha)) set.add(b.fecha);
+      });
+      return Array.from(set).sort((a, b) => b.localeCompare(a));
+    }
+
+    function renderDateSelectorBar(sedeCode) {
+      const today = getTodayDateISO();
+      const isToday = selectedOperationalDate === today;
+      const historyDates = getAvailableHistoryDates();
+
+      return `
+        <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 mb-4">
+          <div class="flex items-center gap-2 text-xs flex-wrap">
+            <span class="font-bold text-slate-700">Filtro por Fecha:</span>
+            <span class="px-2 py-0.5 rounded-md font-bold ${isToday ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+              ${isToday ? `Hoy (${today}) • Día Operativo Activo` : `Histórico (${selectedOperationalDate}) • Solo Lectura`}
+            </span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <select id="quickHistoryDateSelect" class="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-mono font-semibold text-slate-700">
+              ${historyDates.map(d => `<option value="${d}" ${d === selectedOperationalDate ? 'selected' : ''}>${d === today ? `${d} (Hoy)` : d}</option>`).join('')}
+            </select>
+            <input id="operationalDatePicker" type="date" max="${today}" value="${selectedOperationalDate}"
+              class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-mono font-semibold text-slate-800" />
+            ${!isToday ? `<button type="button" id="resetDateTodayBtn" class="px-2.5 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold">Ir a Hoy</button>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function bindDateSelectorEvents(onChangeCb) {
+      const picker = document.getElementById('operationalDatePicker');
+      const quickSel = document.getElementById('quickHistoryDateSelect');
+      const btnToday = document.getElementById('resetDateTodayBtn');
+
+      if (picker) {
+        picker.addEventListener('change', (e) => {
+          if (e.target.value) {
+            selectedOperationalDate = e.target.value;
+            ensureDailySnapshotForDate(selectedOperationalDate);
+            onChangeCb();
+          }
+        });
+      }
+      if (quickSel) {
+        quickSel.addEventListener('change', (e) => {
+          if (e.target.value) {
+            selectedOperationalDate = e.target.value;
+            ensureDailySnapshotForDate(selectedOperationalDate);
+            onChangeCb();
+          }
+        });
+      }
+      if (btnToday) {
+        btnToday.addEventListener('click', () => {
+          selectedOperationalDate = getTodayDateISO();
+          ensureDailySnapshotForDate(selectedOperationalDate);
+          onChangeCb();
+        });
+      }
+    }
+
     // =========================================================================
-    // 4. SINCRONIZACIÓN INTERNA CON GOOGLE SHEETS / WEBAPP (SIN UI EXPUESTA)
+    // 4. SINCRONIZACIÓN AUTOMÁTICA EN TIEMPO REAL CON GOOGLE SHEETS / WEBAPP
     // =========================================================================
     async function fetchSheetTab(tabName) {
       const url = `https://docs.google.com/spreadsheets/d/${INTERNAL_SYSTEM_CONFIG.sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(tabName)}`;
@@ -764,6 +977,23 @@
     async function syncAllFromGoogleSheets(silent = true) {
       const indicator = document.getElementById('sheetSyncIndicator');
       try {
+        const schedRows = await fetchSheetTab(INTERNAL_SYSTEM_CONFIG.tabs.HORARIOS);
+        ensureSchedulesState(appState);
+        schedRows.forEach((r) => {
+          const code = cellVal(r, 0).toUpperCase();
+          if (!code || code === 'CÓDIGO SEDE' || !SEDE_MAP[code]) return;
+          const sObj = SEDE_MAP[code];
+          const hasIni = sObj.niveles.includes('Inicial');
+          appState.schedules[code] = {
+            ingresoInicial: hasIni ? (cellVal(r, 2) || '08:00') : '—',
+            salidaInicial: hasIni ? (cellVal(r, 3) || '13:00') : '—',
+            ingresoPrimaria: cellVal(r, 4) || '07:45',
+            salidaPrimaria: cellVal(r, 5) || '14:30'
+          };
+        });
+      } catch (e) {}
+
+      try {
         const rows = await fetchSheetTab(INTERNAL_SYSTEM_CONFIG.tabs.ALUMNOS);
         const parsedStudents = [];
         rows.forEach((r) => {
@@ -774,6 +1004,7 @@
           const rawNivel = cellVal(r, 4);
           const nivel = sObj.niveles.includes(rawNivel) ? rawNivel : 'Primaria';
           const estado = normalizeFlowState(cellVal(r, 9));
+          const times = getSedeOfficialTimes(codigoSede, nivel);
           parsedStudents.push({
             codigoSede,
             sedeNombre: sObj.name,
@@ -783,7 +1014,8 @@
             aula: cellVal(r, 5),
             tutor: cellVal(r, 6),
             policia: cellVal(r, 7),
-            salidaOficial: cellVal(r, 8) || (nivel === 'Inicial' ? '13:00' : '14:30'),
+            ingresoOficial: times.ingreso,
+            salidaOficial: cellVal(r, 8) || times.salida,
             estado,
             quienRecogio: cellVal(r, 10) || '—',
             dniFamiliar: cellVal(r, 11) || '—',
@@ -799,6 +1031,10 @@
           const sheetCodes = new Set(parsedStudents.map(s => s.codigoAlumno));
           const localOnly = appState.students.filter(s => !sheetCodes.has(s.codigoAlumno));
           appState.students = [...parsedStudents, ...localOnly];
+          const today = getTodayDateISO();
+          if (Array.isArray(appState.dailyRecords[today])) {
+            appState.dailyRecords[today] = appState.students.map(item => ({ ...item, fechaRegistro: today }));
+          }
         }
       } catch (e) {}
 
@@ -826,7 +1062,8 @@
             dniFamiliar: cellVal(r, 13),
             horaPuerta: cellVal(r, 14),
             horaSalidaTutor: cellVal(r, 15),
-            ejecutor: cellVal(r, 16)
+            ejecutor: cellVal(r, 16),
+            detalle: cellVal(r, 17)
           });
         });
         if (parsedBitacora.length > 0) {
@@ -895,7 +1132,14 @@
       if (indicator) {
         indicator.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Sistema Activo (${appState.accounts.length} perfiles)`;
       }
-      if (!silent) {
+
+      if (currentUser && silent) {
+        const activeInput = document.activeElement;
+        const isTyping = activeInput && (activeInput.tagName === 'INPUT' || activeInput.tagName === 'SELECT' || activeInput.tagName === 'TEXTAREA');
+        if (!isTyping) {
+          renderActiveTab();
+        }
+      } else if (!silent) {
         if (currentUser) renderActiveTab();
         showToast('Estado del sistema sincronizado.');
       }
@@ -921,13 +1165,39 @@
       } catch (e) {}
     }
 
+    function startAutoSyncLoop() {
+      stopAutoSyncLoop();
+      autoSyncTimerId = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          syncAllFromGoogleSheets(true);
+        }
+      }, 12000);
+    }
+
+    function stopAutoSyncLoop() {
+      if (autoSyncTimerId) {
+        clearInterval(autoSyncTimerId);
+        autoSyncTimerId = null;
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        syncAllFromGoogleSheets(true);
+      }
+    });
+
+    window.addEventListener('focus', () => {
+      syncAllFromGoogleSheets(true);
+    });
+
     // =========================================================================
-    // 5. REGISTRO CENTRALIZADO DE PROCESOS DEL FLUJO DE 3 PASOS
+    // 5. REGISTRO CENTRALIZADO DE PROCESOS DEL FLUJO DE 3 PASOS POR DÍA
     // =========================================================================
     function appendProcessLog(student, accion, extra = {}) {
       const now = new Date();
-      const fecha = now.toISOString().slice(0, 10);
-      const hora = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const fecha = extra.fecha || student.fechaRegistro || getTodayDateISO();
+      const hora = extra.hora || now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
       const ejecutor = currentUser ? currentUser.usuario : 'sistema';
       const horaP1 = student.horaNotificacionPolicia || '—';
       const horaP2 = student.horaSalidaAulaTutor || '—';
@@ -935,7 +1205,7 @@
 
       const detalle =
         extra.detalle ||
-        `${accion} | Sede: ${student.sedeNombre} | ${student.nivel} - ${student.aula} | Tutor: ${student.tutor} | Policía: ${student.policia} | Quien recoge: ${student.quienRecogio || '—'} (DNI: ${student.dniFamiliar || '—'}) | Horas P1/P2/P3: ${horaP1} / ${horaP2} / ${horaP3} | Registrado por: ${ejecutor}`;
+        `[${fecha}] ${accion} | Sede: ${student.sedeNombre} | ${student.nivel} - ${student.aula} | Tutor: ${student.tutor} | Policía: ${student.policia} | Quien recoge: ${student.quienRecogio || '—'} (DNI: ${student.dniFamiliar || '—'}) | Horas P1/P2/P3: ${horaP1} / ${horaP2} / ${horaP3} | Registrado por: ${ejecutor}`;
 
       const entry = {
         num: appState.bitacora.length + 1,
@@ -963,10 +1233,14 @@
       return entry;
     }
 
-    // PASO 1 (POLICÍA): Notificar al tutor llegada del familiar para alumno registrado
     function openPoliceNotifyModal(codigoAlumno) {
       if (!currentUser || currentUser.perfil !== 'Policía') return;
-      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno && s.codigoSede === currentUser.codigoSede);
+      const today = getTodayDateISO();
+      if (selectedOperationalDate !== today) {
+        showToast('Solo puede registrar movimientos en la fecha actual (Hoy).');
+        return;
+      }
+      const st = getActiveDayStudent(codigoAlumno, currentUser.codigoSede, today);
       if (!st) {
         showToast('Solo se pueden procesar alumnos registrados en esta sede.');
         return;
@@ -986,7 +1260,8 @@
     document.getElementById('policeNotifyForm').addEventListener('submit', (e) => {
       e.preventDefault();
       if (!currentUser || currentUser.perfil !== 'Policía') return;
-      const st = appState.students.find(s => s.codigoAlumno === activeNotifyStudentCode && s.codigoSede === currentUser.codigoSede);
+      const today = getTodayDateISO();
+      const st = getActiveDayStudent(activeNotifyStudentCode, currentUser.codigoSede, today);
       if (!st || st.estado !== FLOW_STATES.EN_AULA) return;
 
       const rel = document.getElementById('notifyRelation').value;
@@ -994,13 +1269,17 @@
       const dni = document.getElementById('notifyPersonDni').value.trim();
       const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+      st.fechaRegistro = today;
       st.estado = FLOW_STATES.NOTIFICADO;
       st.quienRecogio = `${rel} - ${person}`;
       st.dniFamiliar = dni;
       st.horaNotificacionPolicia = nowTime;
       st.puntualidad = `🔔 Notificado al tutor (${nowTime})`;
 
-      const bitEntry = appendProcessLog(st, 'PASO 1: POLICÍA NOTIFICÓ LLEGADA DE FAMILIAR AL TUTOR');
+      const baseRef = appState.students.find(s => s.codigoAlumno === st.codigoAlumno && s.codigoSede === st.codigoSede);
+      if (baseRef) Object.assign(baseRef, { ...st });
+
+      const bitEntry = appendProcessLog(st, 'PASO 1: POLICÍA NOTIFICÓ LLEGADA DE FAMILIAR AL TUTOR', { fecha: today, hora: nowTime });
       saveState();
 
       const sedeObj = SEDE_MAP[st.codigoSede];
@@ -1015,10 +1294,14 @@
       showToast(`Paso 1 registrado: tutor notificado sobre ${st.estudiante}.`);
     });
 
-    // PASO 2 (TUTOR): Informar que el alumno está saliendo/retirándose del aula
     function tutorInformLeavingClassroom(codigoAlumno) {
       if (!currentUser || !currentUser.perfil.startsWith('Tutor')) return;
-      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno && s.codigoSede === currentUser.codigoSede);
+      const today = getTodayDateISO();
+      if (selectedOperationalDate !== today) {
+        showToast('Solo puede registrar movimientos en la fecha actual (Hoy).');
+        return;
+      }
+      const st = getActiveDayStudent(codigoAlumno, currentUser.codigoSede, today);
       if (!st) {
         showToast('Solo se pueden procesar alumnos registrados en esta sede.');
         return;
@@ -1029,11 +1312,15 @@
       }
 
       const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      st.fechaRegistro = today;
       st.estado = FLOW_STATES.SALIENDO;
       st.horaSalidaAulaTutor = nowTime;
       st.puntualidad = `🚶 Saliendo del aula (${nowTime})`;
 
-      const bitEntry = appendProcessLog(st, 'PASO 2: TUTOR INFORMÓ QUE ALUMNO SE RETIRA DEL AULA');
+      const baseRef = appState.students.find(s => s.codigoAlumno === st.codigoAlumno && s.codigoSede === st.codigoSede);
+      if (baseRef) Object.assign(baseRef, { ...st });
+
+      const bitEntry = appendProcessLog(st, 'PASO 2: TUTOR INFORMÓ QUE ALUMNO SE RETIRA DEL AULA', { fecha: today, hora: nowTime });
       saveState();
 
       const sedeObj = SEDE_MAP[st.codigoSede];
@@ -1047,10 +1334,14 @@
       showToast(`Paso 2 registrado: ${st.estudiante} informado como saliendo del aula.`);
     }
 
-    // PASO 3 (POLICÍA): Confirmar que el alumno se retiró con quien lo recogió
     function policeConfirmStudentLeft(codigoAlumno) {
       if (!currentUser || currentUser.perfil !== 'Policía') return;
-      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno && s.codigoSede === currentUser.codigoSede);
+      const today = getTodayDateISO();
+      if (selectedOperationalDate !== today) {
+        showToast('Solo puede registrar movimientos en la fecha actual (Hoy).');
+        return;
+      }
+      const st = getActiveDayStudent(codigoAlumno, currentUser.codigoSede, today);
       if (!st) {
         showToast('Solo se pueden procesar alumnos registrados en esta sede.');
         return;
@@ -1061,11 +1352,15 @@
       }
 
       const nowTime = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false });
+      st.fechaRegistro = today;
       st.estado = FLOW_STATES.RETIRADO;
       st.horaRetiroConfirmado = nowTime;
       st.puntualidad = `✅ Retiro confirmado (${nowTime})`;
 
-      const bitEntry = appendProcessLog(st, 'PASO 3: POLICÍA CONFIRMÓ RETIRO CON FAMILIAR AUTORIZADO');
+      const baseRef = appState.students.find(s => s.codigoAlumno === st.codigoAlumno && s.codigoSede === st.codigoSede);
+      if (baseRef) Object.assign(baseRef, { ...st });
+
+      const bitEntry = appendProcessLog(st, 'PASO 3: POLICÍA CONFIRMÓ RETIRO CON FAMILIAR AUTORIZADO', { fecha: today, hora: nowTime });
       saveState();
 
       const sedeObj = SEDE_MAP[st.codigoSede];
@@ -1178,6 +1473,9 @@
 
     function enterDashboard(account) {
       currentUser = account;
+      selectedOperationalDate = getTodayDateISO();
+      ensureDailySnapshotForDate(selectedOperationalDate);
+
       const sedeInfo = getSedeInfo(account.codigoSede);
 
       document.getElementById('loginView').classList.add('hidden');
@@ -1193,9 +1491,11 @@
 
       buildNavForRole(account);
       renderActiveTab();
+      startAutoSyncLoop();
     }
 
     document.getElementById('logoutBtn').addEventListener('click', () => {
+      stopAutoSyncLoop();
       currentUser = null;
       document.getElementById('appShell').classList.add('hidden');
       document.getElementById('loginView').classList.remove('hidden');
@@ -1206,7 +1506,7 @@
     document.getElementById('syncNowBtn').addEventListener('click', () => syncAllFromGoogleSheets(false));
 
     // =========================================================================
-    // 7. NAVEGACIÓN POR PERFIL (SIN OPCIÓN DE HOJA DE CÁLCULO)
+    // 7. NAVEGACIÓN POR PERFIL
     // =========================================================================
     function buildNavForRole(account) {
       const tabsEl = document.getElementById('roleNavTabs');
@@ -1215,6 +1515,7 @@
       if (account.perfil === 'Administrador General') {
         tabs = [
           { id: 'overview', label: 'Supervisión 48 Sedes' },
+          { id: 'schedules', label: 'Horarios por Sede' },
           { id: 'accounts', label: 'Perfiles y Accesos por Sede' },
           { id: 'policePerms', label: 'Permisos de Policía' },
           { id: 'resetRecords', label: 'Reiniciar Registros de Alumnos' },
@@ -1263,6 +1564,7 @@
 
       switch (activeTab) {
         case 'overview': return renderAdminOverview(container);
+        case 'schedules': return renderAdminSchedules(container);
         case 'accounts': return renderAdminAccounts(container);
         case 'policePerms': return renderAdminPolicePerms(container);
         case 'resetRecords': return renderAdminReset(container);
@@ -1276,18 +1578,20 @@
     }
 
     // =========================================================================
-    // 8. VISTAS DEL ADMINISTRADOR GENERAL
+    // 8. VISTAS DEL ADMINISTRADOR GENERAL (INCLUYE HORARIOS POR SEDE Y FECHAS)
     // =========================================================================
     function renderAdminOverview(container) {
-      const totalStudents = appState.students.length;
-      const step1Count = appState.students.filter(s => s.estado === FLOW_STATES.NOTIFICADO).length;
-      const step2Count = appState.students.filter(s => s.estado === FLOW_STATES.SALIENDO).length;
-      const step3Count = appState.students.filter(s => s.estado === FLOW_STATES.RETIRADO).length;
+      const dateList = getStudentsForSedeAndDate('ALL', selectedOperationalDate);
+      const totalStudents = dateList.length;
+      const step1Count = dateList.filter(s => s.estado === FLOW_STATES.NOTIFICADO).length;
+      const step2Count = dateList.filter(s => s.estado === FLOW_STATES.SALIENDO).length;
+      const step3Count = dateList.filter(s => s.estado === FLOW_STATES.RETIRADO).length;
+      const today = getTodayDateISO();
 
       container.innerHTML = `
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 fade-in">
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-            <p class="text-[11px] font-bold uppercase text-slate-400">Alumnos Registrados</p>
+            <p class="text-[11px] font-bold uppercase text-slate-400">Alumnos del Día (${selectedOperationalDate})</p>
             <p class="text-2xl font-extrabold text-slate-900 mt-1">${totalStudents}</p>
           </div>
           <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -1307,10 +1611,12 @@
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
           <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
             <div>
-              <h2 class="text-base font-extrabold text-slate-900">Consolidado del Flujo de 3 Pasos (48 Sedes)</h2>
-              <p class="text-xs text-slate-500">Solo el Administrador General puede revertir un registro a "EN AULA" si requiere corrección excepcional.</p>
+              <h2 class="text-base font-extrabold text-slate-900">Consolidado Diario del Flujo de 3 Pasos (48 Sedes)</h2>
+              <p class="text-xs text-slate-500">Filtre por sede y fecha para consultar el registro diario activo o el histórico de días anteriores.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
+              <input id="adminDateFilter" type="date" max="${today}" value="${selectedOperationalDate}"
+                class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-semibold text-slate-700 bg-white" />
               <button type="button" onclick="exportFullWorkbookXlsx()"
                 class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm">
                 Exportar Reporte Excel
@@ -1327,6 +1633,7 @@
                 <tr>
                   <th class="px-3.5 py-2.5">Sede</th>
                   <th class="px-3.5 py-2.5">Código / Alumno</th>
+                  <th class="px-3.5 py-2.5">Horario Sede (Ing/Sal)</th>
                   <th class="px-3.5 py-2.5">Quien Recoge (DNI)</th>
                   <th class="px-3.5 py-2.5">Tiempos (P1 / P2 / P3)</th>
                   <th class="px-3.5 py-2.5">Estado</th>
@@ -1341,28 +1648,30 @@
 
       const renderRows = () => {
         const filterCode = document.getElementById('adminSedeFilter').value;
-        const list = filterCode === 'ALL'
-          ? appState.students
-          : appState.students.filter(s => s.codigoSede === filterCode);
+        const filterDate = document.getElementById('adminDateFilter').value || getTodayDateISO();
+        selectedOperationalDate = filterDate;
+        const list = getStudentsForSedeAndDate(filterCode, filterDate);
 
         const tbody = document.getElementById('adminStudentsTbody');
         if (!list.length) {
-          tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400 font-medium">No hay registros de alumnos para el filtro seleccionado.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400 font-medium">No hay registros de alumnos para la fecha y sede seleccionadas.</td></tr>`;
           return;
         }
         tbody.innerHTML = list.map(s => {
           const sInfo = getSedeInfo(s.codigoSede);
+          const times = getSedeOfficialTimes(s.codigoSede, s.nivel);
           return `
             <tr class="hover:bg-slate-50">
               <td class="px-3.5 py-2.5 font-semibold text-slate-700">${sInfo.shortName} <span class="text-[10px] text-slate-400">(${s.codigoSede})</span></td>
               <td class="px-3.5 py-2.5"><span class="font-mono text-slate-400">${s.codigoAlumno}</span> • <strong class="text-slate-900">${s.estudiante}</strong><div class="text-[10px] text-slate-400">${s.nivel} • ${s.aula}</div></td>
+              <td class="px-3.5 py-2.5 font-mono text-[11px] text-slate-600">${times.ingreso} / ${times.salida}</td>
               <td class="px-3.5 py-2.5 text-slate-600">${s.quienRecogio} <span class="font-mono text-slate-400">(${s.dniFamiliar})</span></td>
               <td class="px-3.5 py-2.5 font-mono text-[11px] text-slate-600">${s.horaNotificacionPolicia} / ${s.horaSalidaAulaTutor} / ${s.horaRetiroConfirmado}</td>
               <td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>
               <td class="px-3.5 py-2.5 text-right">
-                ${s.estado !== FLOW_STATES.EN_AULA
+                ${(s.estado !== FLOW_STATES.EN_AULA && filterDate === getTodayDateISO())
                   ? `<button type="button" onclick="adminResetStudentCycle('${s.codigoAlumno}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-red-50 text-red-700 font-bold text-[11px]">Reiniciar Ciclo</button>`
-                  : `<span class="text-[11px] text-slate-400">En aula</span>`}
+                  : `<span class="text-[11px] text-slate-400">${filterDate === getTodayDateISO() ? 'En aula' : 'Histórico'}</span>`}
               </td>
             </tr>
           `;
@@ -1371,13 +1680,16 @@
 
       renderRows();
       document.getElementById('adminSedeFilter').addEventListener('change', renderRows);
+      document.getElementById('adminDateFilter').addEventListener('change', () => renderAdminOverview(container));
     }
 
     function adminResetStudentCycle(codigoAlumno) {
       if (!currentUser || currentUser.perfil !== 'Administrador General') return;
-      const st = appState.students.find(s => s.codigoAlumno === codigoAlumno);
+      const today = getTodayDateISO();
+      const st = getActiveDayStudent(codigoAlumno, null, today);
       if (!st) return;
 
+      st.fechaRegistro = today;
       st.estado = FLOW_STATES.EN_AULA;
       st.quienRecogio = '—';
       st.dniFamiliar = '—';
@@ -1386,7 +1698,10 @@
       st.horaRetiroConfirmado = '—';
       st.puntualidad = '🕒 En aula';
 
-      const bitEntry = appendProcessLog(st, 'REINICIO DE CICLO DE SALIDA POR ADMINISTRADOR');
+      const baseRef = appState.students.find(s => s.codigoAlumno === st.codigoAlumno && s.codigoSede === st.codigoSede);
+      if (baseRef) Object.assign(baseRef, { ...st });
+
+      const bitEntry = appendProcessLog(st, 'REINICIO DE CICLO DE SALIDA POR ADMINISTRADOR', { fecha: today });
       saveState();
 
       const sedeObj = SEDE_MAP[st.codigoSede];
@@ -1398,6 +1713,187 @@
 
       renderActiveTab();
       showToast(`Ciclo de ${st.estudiante} restablecido a EN AULA.`);
+    }
+
+    function renderAdminSchedules(container) {
+      ensureSchedulesState(appState);
+
+      container.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 h-fit">
+            <h2 class="text-base font-extrabold text-slate-900 mb-1">Configurar Horario por Sede</h2>
+            <p class="text-xs text-slate-500 mb-4">Defina la hora oficial de <strong>ingreso</strong> y <strong>salida</strong> para la sede seleccionada.</p>
+
+            <form id="sedeScheduleForm" class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Sede Institucional</label>
+                <select id="schedSedeSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold">
+                  ${SEDES_ALFABETICAS.map(s => `<option value="${s.code}">${s.shortName} (${s.code}) — [${s.nivelesLabel}]</option>`).join('')}
+                </select>
+              </div>
+
+              <div id="schedInicialBox" class="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 space-y-2.5">
+                <p class="text-xs font-extrabold text-indigo-900">Nivel Inicial</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-bold text-indigo-800 mb-1">Hora de Ingreso</label>
+                    <input id="schedIngresoIni" type="time" class="w-full px-2.5 py-1.5 rounded-lg border border-indigo-300 bg-white text-xs font-mono" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-indigo-800 mb-1">Hora de Salida</label>
+                    <input id="schedSalidaIni" type="time" class="w-full px-2.5 py-1.5 rounded-lg border border-indigo-300 bg-white text-xs font-mono" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-3.5 rounded-xl bg-sky-50/70 border border-sky-200 space-y-2.5">
+                <p class="text-xs font-extrabold text-sky-900">Nivel Primaria</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-bold text-sky-800 mb-1">Hora de Ingreso</label>
+                    <input id="schedIngresoPri" type="time" required class="w-full px-2.5 py-1.5 rounded-lg border border-sky-300 bg-white text-xs font-mono" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-sky-800 mb-1">Hora de Salida</label>
+                    <input id="schedSalidaPri" type="time" required class="w-full px-2.5 py-1.5 rounded-lg border border-sky-300 bg-white text-xs font-mono" />
+                  </div>
+                </div>
+              </div>
+
+              <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow">
+                Guardar Horarios de la Sede
+              </button>
+            </form>
+          </div>
+
+          <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <h2 class="text-base font-extrabold text-slate-900 mb-1">Horarios Oficiales Configurados (48 Sedes)</h2>
+            <p class="text-xs text-slate-500 mb-4">Haga clic en cualquier sede para cargar o editar su horario de ingreso y salida.</p>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl max-h-[540px]">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
+                  <tr>
+                    <th class="px-3.5 py-2.5">Sede</th>
+                    <th class="px-3.5 py-2.5">Modalidad</th>
+                    <th class="px-3.5 py-2.5">Ingreso / Salida (Inicial)</th>
+                    <th class="px-3.5 py-2.5">Ingreso / Salida (Primaria)</th>
+                  </tr>
+                </thead>
+                <tbody id="schedulesTableBody" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const loadFormForSede = (code) => {
+        const sObj = SEDE_MAP[code];
+        const hasIni = sObj && sObj.niveles.includes('Inicial');
+        const sc = appState.schedules[code] || {};
+        const iniBox = document.getElementById('schedInicialBox');
+        const ingIni = document.getElementById('schedIngresoIni');
+        const salIni = document.getElementById('schedSalidaIni');
+
+        if (hasIni) {
+          iniBox.classList.remove('hidden');
+          ingIni.required = true;
+          salIni.required = true;
+          ingIni.value = (sc.ingresoInicial && sc.ingresoInicial !== '—') ? sc.ingresoInicial : '08:00';
+          salIni.value = (sc.salidaInicial && sc.salidaInicial !== '—') ? sc.salidaInicial : '13:00';
+        } else {
+          iniBox.classList.add('hidden');
+          ingIni.required = false;
+          salIni.required = false;
+          ingIni.value = '';
+          salIni.value = '';
+        }
+
+        document.getElementById('schedIngresoPri').value = sc.ingresoPrimaria || '07:45';
+        document.getElementById('schedSalidaPri').value = sc.salidaPrimaria || '14:30';
+      };
+
+      const renderSchedTable = () => {
+        const tbody = document.getElementById('schedulesTableBody');
+        tbody.innerHTML = SEDES_ALFABETICAS.map((s) => {
+          const sc = appState.schedules[s.code] || {};
+          const hasIni = s.niveles.includes('Inicial');
+          return `
+            <tr class="hover:bg-slate-50 cursor-pointer" onclick="const el=document.getElementById('schedSedeSelect'); el.value='${s.code}'; el.dispatchEvent(new Event('change'));">
+              <td class="px-3.5 py-2.5 font-semibold text-slate-800">${s.shortName} <span class="text-[10px] text-slate-400">(${s.code})</span></td>
+              <td class="px-3.5 py-2.5">${renderModalidadBadge(s)}</td>
+              <td class="px-3.5 py-2.5 font-mono text-slate-700">${hasIni ? `${sc.ingresoInicial || '08:00'} / ${sc.salidaInicial || '13:00'}` : '— (Solo Primaria)'}</td>
+              <td class="px-3.5 py-2.5 font-mono text-slate-700">${sc.ingresoPrimaria || '07:45'} / ${sc.salidaPrimaria || '14:30'}</td>
+            </tr>
+          `;
+        }).join('');
+      };
+
+      const sel = document.getElementById('schedSedeSelect');
+      loadFormForSede(sel.value);
+      renderSchedTable();
+
+      sel.addEventListener('change', () => loadFormForSede(sel.value));
+
+      document.getElementById('sedeScheduleForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const code = sel.value;
+        const sObj = SEDE_MAP[code];
+        const hasIni = sObj && sObj.niveles.includes('Inicial');
+        const ingresoPri = document.getElementById('schedIngresoPri').value;
+        const salidaPri = document.getElementById('schedSalidaPri').value;
+        const ingresoIni = hasIni ? document.getElementById('schedIngresoIni').value : '—';
+        const salidaIni = hasIni ? document.getElementById('schedSalidaIni').value : '—';
+
+        appState.schedules[code] = {
+          ingresoInicial: ingresoIni,
+          salidaInicial: salidaIni,
+          ingresoPrimaria: ingresoPri,
+          salidaPrimaria: salidaPri
+        };
+
+        appState.students.forEach((st) => {
+          if (st.codigoSede === code) {
+            const times = getSedeOfficialTimes(code, st.nivel);
+            st.ingresoOficial = times.ingreso;
+            st.salidaOficial = times.salida;
+          }
+        });
+
+        Object.keys(appState.dailyRecords || {}).forEach((dKey) => {
+          if (Array.isArray(appState.dailyRecords[dKey])) {
+            appState.dailyRecords[dKey].forEach((st) => {
+              if (st.codigoSede === code) {
+                const times = getSedeOfficialTimes(code, st.nivel);
+                st.ingresoOficial = times.ingreso;
+                st.salidaOficial = times.salida;
+              }
+            });
+          }
+        });
+
+        const auditEntry = {
+          id: `AUD-${Date.now()}`,
+          fecha: new Date().toLocaleString('es-PE'),
+          usuario: currentUser.usuario,
+          accion: 'CONFIGURACIÓN DE HORARIO DE SEDE',
+          alcance: sObj.name,
+          detalle: hasIni
+            ? `Inicial: Ingreso ${ingresoIni} / Salida ${salidaIni} | Primaria: Ingreso ${ingresoPri} / Salida ${salidaPri}`
+            : `Primaria: Ingreso ${ingresoPri} / Salida ${salidaPri}`
+        };
+        appState.auditLogs.unshift(auditEntry);
+        saveState();
+
+        pushToGoogleSheets('UPDATE_SCHEDULE', {
+          codigoSede: code,
+          sedeTab: sObj.tab,
+          schedule: appState.schedules[code],
+          audit: auditEntry
+        });
+
+        renderSchedTable();
+        showToast(`Horarios guardados para ${sObj.shortName}.`);
+      });
     }
 
     function renderAdminAccounts(container) {
@@ -1457,12 +1953,12 @@
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold sticky top-0 border-b border-slate-200">
                   <tr>
-                    <th class="px-3 py-2.5">Sede / Modalidad</th>
-                    <th class="px-3 py-2.5">Perfil</th>
-                    <th class="px-3 py-2.5">Titular</th>
-                    <th class="px-3 py-2.5">Usuario</th>
-                    <th class="px-3 py-2.5">Estado Clave</th>
-                    <th class="px-3 py-2.5 text-right">Acciones</th>
+                    <th class="px-3.5 py-2.5">Sede / Modalidad</th>
+                    <th class="px-3.5 py-2.5">Perfil</th>
+                    <th class="px-3.5 py-2.5">Titular</th>
+                    <th class="px-3.5 py-2.5">Usuario</th>
+                    <th class="px-3.5 py-2.5">Estado Clave</th>
+                    <th class="px-3.5 py-2.5 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="accountsTableBody" class="divide-y divide-slate-100"></tbody>
@@ -1506,19 +2002,19 @@
           const sInfo = getSedeInfo(a.codigoSede);
           return `
             <tr class="hover:bg-slate-50">
-              <td class="px-3 py-2.5 font-semibold text-slate-700">
+              <td class="px-3.5 py-2.5 font-semibold text-slate-700">
                 ${a.codigoSede === 'ADMIN' ? 'ADMIN' : `${sInfo.shortName} <span class="text-[10px] text-slate-400">(${a.codigoSede})</span>`}
                 <div class="mt-0.5">${a.codigoSede === 'ADMIN' ? '<span class="text-[10px] text-slate-400">48 Sedes</span>' : renderModalidadBadge(sInfo)}</div>
               </td>
-              <td class="px-3 py-2.5 font-bold text-blue-700">${a.perfil}</td>
-              <td class="px-3 py-2.5 text-slate-800">${a.nombre}<div class="text-[10px] text-slate-400">${a.aulaNivel}</div></td>
-              <td class="px-3 py-2.5 font-mono font-semibold text-slate-700">${a.usuario}</td>
-              <td class="px-3 py-2.5">
+              <td class="px-3.5 py-2.5 font-bold text-blue-700">${a.perfil}</td>
+              <td class="px-3.5 py-2.5 text-slate-800">${a.nombre}<div class="text-[10px] text-slate-400">${a.aulaNivel}</div></td>
+              <td class="px-3.5 py-2.5 font-mono font-semibold text-slate-700">${a.usuario}</td>
+              <td class="px-3.5 py-2.5">
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${a.estadoClave === 'ACTIVA' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">
                   ${a.estadoClave}
                 </span>
               </td>
-              <td class="px-3 py-2.5 text-right space-x-1">
+              <td class="px-3.5 py-2.5 text-right space-x-1">
                 <button type="button" onclick="regenerateTempPassword('${a.id}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-blue-700 font-bold text-[11px]">Nueva Clave</button>
                 ${a.codigoSede !== 'ADMIN' ? `<button type="button" onclick="deleteAccount('${a.id}')" class="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-bold text-[11px]">Quitar</button>` : ''}
               </td>
@@ -1804,6 +2300,11 @@
         const sedeObj = SEDE_MAP[pendingResetSede];
         const before = appState.students.length;
         appState.students = appState.students.filter(st => st.codigoSede !== pendingResetSede);
+        Object.keys(appState.dailyRecords || {}).forEach(d => {
+          if (Array.isArray(appState.dailyRecords[d])) {
+            appState.dailyRecords[d] = appState.dailyRecords[d].filter(st => st.codigoSede !== pendingResetSede);
+          }
+        });
         deletedCount = before - appState.students.length;
         scopeLabel = `Por Sede: ${sedeObj.name}`;
         targetSedeCode = pendingResetSede;
@@ -1811,6 +2312,7 @@
       } else {
         deletedCount = appState.students.length;
         appState.students = [];
+        appState.dailyRecords = {};
         scopeLabel = 'General (Todas las 48 Sedes)';
       }
 
@@ -1839,18 +2341,26 @@
 
     function renderAdminAudit(container) {
       const sedeFilterId = 'auditSedeFilter';
+      const dateFilterId = 'auditDateFilter';
+      const today = getTodayDateISO();
+
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-4">
               <div>
-                <h2 class="text-base font-extrabold text-slate-900">Visualización Individualizada por Sede — Registro de Procesos (3 Pasos)</h2>
-                <p class="text-xs text-slate-500">Cada proceso queda registrado en la hoja de la sede correspondiente y en <strong>Bitacora_Global</strong>.</p>
+                <h2 class="text-base font-extrabold text-slate-900">Visualización Individualizada por Sede y Fecha — Registro de Procesos (3 Pasos)</h2>
+                <p class="text-xs text-slate-500">Cada proceso queda registrado en la pestaña de su sede y en <strong>Bitacora_Global</strong>.</p>
               </div>
-              <select id="${sedeFilterId}" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white">
-                <option value="ALL">Todas las Sedes (Bitacora_Global)</option>
-                ${SEDES_ALFABETICAS.map(s => `<option value="${s.code}">${s.shortName} (${s.code})</option>`).join('')}
-              </select>
+              <div class="flex flex-wrap items-center gap-2">
+                <input id="${dateFilterId}" type="date" max="${today}" value="${selectedOperationalDate}"
+                  class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-semibold text-slate-700 bg-white" />
+                <button type="button" id="auditAllDatesBtn" class="px-2.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold">Todas las Fechas</button>
+                <select id="${sedeFilterId}" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 bg-white">
+                  <option value="ALL">Todas las Sedes (Bitacora_Global)</option>
+                  ${SEDES_ALFABETICAS.map(s => `<option value="${s.code}">${s.shortName} (${s.code})</option>`).join('')}
+                </select>
+              </div>
             </div>
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
@@ -1900,14 +2410,22 @@
         </div>
       `;
 
+      let filterByAllDates = false;
+
       const paintBitacora = () => {
         const sel = document.getElementById(sedeFilterId).value;
-        const rows = sel === 'ALL'
-          ? appState.bitacora
-          : appState.bitacora.filter(b => b.codigoSede === sel);
+        const dVal = document.getElementById(dateFilterId).value;
+        if (dVal) selectedOperationalDate = dVal;
+
+        const rows = appState.bitacora.filter(b => {
+          const matchSede = sel === 'ALL' || b.codigoSede === sel;
+          const matchDate = filterByAllDates || !dVal || b.fecha === dVal;
+          return matchSede && matchDate;
+        });
+
         const tbody = document.getElementById('auditBitacoraBody');
         tbody.innerHTML = rows.length
-          ? rows.slice(0, 80).map(b => `
+          ? rows.slice(0, 100).map(b => `
               <tr>
                 <td class="px-3 py-2 font-mono text-slate-500 whitespace-nowrap">${b.fecha} ${b.hora}</td>
                 <td class="px-3 py-2 font-semibold">${b.sedeNombre}</td>
@@ -1923,24 +2441,36 @@
 
       paintBitacora();
       document.getElementById(sedeFilterId).addEventListener('change', paintBitacora);
+      document.getElementById(dateFilterId).addEventListener('change', () => {
+        filterByAllDates = false;
+        paintBitacora();
+      });
+      document.getElementById('auditAllDatesBtn').addEventListener('click', () => {
+        filterByAllDates = !filterByAllDates;
+        showToast(filterByAllDates ? 'Mostrando eventos de todas las fechas.' : `Filtrando por fecha ${document.getElementById(dateFilterId).value}.`);
+        paintBitacora();
+      });
     }
 
     // =========================================================================
-    // 9. VISTAS DE DIRECTOR, TUTOR Y POLICÍA (BLOQUEO DE RE-EDICIÓN OPERATIVA)
+    // 9. VISTAS DE DIRECTOR, TUTOR Y POLICÍA (FILTRO POR FECHA + DÍAS)
     // =========================================================================
     function renderDirectorDashboard(container) {
       const sedeCode = currentUser.codigoSede;
       const sInfo = getSedeInfo(sedeCode);
       const tutors = appState.accounts.filter(a => a.codigoSede === sedeCode && a.perfil.startsWith('Tutor'));
-      const sedeStudents = appState.students.filter(s => s.codigoSede === sedeCode);
+      const sedeStudents = getStudentsForSedeAndDate(sedeCode, selectedOperationalDate);
+      const sched = getSedeOfficialTimes(sedeCode, sInfo.niveles.includes('Inicial') ? 'Inicial' : 'Primaria');
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
+          ${renderDateSelectorBar(sedeCode)}
+
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <p class="text-[11px] font-bold uppercase text-slate-400">Modalidad de la Sede</p>
+              <p class="text-[11px] font-bold uppercase text-slate-400">Modalidad y Horario (${selectedOperationalDate})</p>
               <p class="text-lg font-extrabold text-indigo-700 mt-1">${sInfo.nivelesLabel}</p>
-              <p class="text-[11px] text-slate-500 mt-0.5">${sedeStudents.length} alumnos registrados</p>
+              <p class="text-[11px] text-slate-500 mt-0.5">${sedeStudents.length} alumnos • Ref: ${sched.ingreso} / ${sched.salida}</p>
             </div>
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <p class="text-[11px] font-bold uppercase text-amber-600">Notificados / Saliendo</p>
@@ -1969,20 +2499,24 @@
           </div>
         </div>
       `;
+
+      bindDateSelectorEvents(() => renderActiveTab());
     }
 
     function renderSedeStudentsReadOnly(container) {
       const sInfo = getSedeInfo(currentUser.codigoSede);
-      const list = appState.students.filter(s => s.codigoSede === currentUser.codigoSede);
+      const list = getStudentsForSedeAndDate(currentUser.codigoSede, selectedOperationalDate);
+
       container.innerHTML = `
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h2 class="text-base font-extrabold text-slate-900">Registro de Alumnos — ${sInfo.name}</h2>
-              <p class="text-xs text-slate-500">Vista de consulta: los registros del flujo no se editan desde esta vista.</p>
+              <h2 class="text-base font-extrabold text-slate-900">Registro Diario de Alumnos — ${sInfo.name}</h2>
+              <p class="text-xs text-slate-500">Vista de consulta: seleccione una fecha para revisar el registro del día o el histórico.</p>
             </div>
             ${renderModalidadBadge(sInfo)}
           </div>
+          ${renderDateSelectorBar(currentUser.codigoSede)}
           <div class="overflow-x-auto border border-slate-200 rounded-xl">
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
@@ -2005,28 +2539,31 @@
                     <td class="px-3.5 py-2.5 font-mono text-[11px] text-slate-600">${s.horaNotificacionPolicia} / ${s.horaSalidaAulaTutor} / ${s.horaRetiroConfirmado}</td>
                     <td class="px-3.5 py-2.5">${renderStatusBadge(s.estado)}</td>
                   </tr>
-                `).join('') : `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay alumnos registrados en esta sede.</td></tr>`}
+                `).join('') : `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No hay alumnos registrados para esta fecha en esta sede.</td></tr>`}
               </tbody>
             </table>
           </div>
         </div>
       `;
+
+      bindDateSelectorEvents(() => renderActiveTab());
     }
 
-    // TUTOR (PASO 2): Solo informa que el alumno registrado está saliendo del aula cuando fue NOTIFICADO EN PUERTA.
-    // Una vez registrado (SALIENDO DEL AULA o RETIRADO), queda bloqueado para edición en la vista del Tutor.
     function renderTutorDashboard(container) {
       const sInfo = getSedeInfo(currentUser.codigoSede);
-      const list = appState.students.filter(s => s.codigoSede === currentUser.codigoSede);
+      const isToday = selectedOperationalDate === getTodayDateISO();
+      const list = getStudentsForSedeAndDate(currentUser.codigoSede, selectedOperationalDate);
+
       container.innerHTML = `
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 fade-in">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <div>
               <h2 class="text-base font-extrabold text-slate-900">Paso 2 • Informar Salida del Aula — ${sInfo.name}</h2>
-              <p class="text-xs text-slate-500">Solo puede informar salida de alumnos registrados que ya fueron <strong>notificados en puerta</strong> por el policía. Una vez registrado, queda bloqueado en esta vista.</p>
+              <p class="text-xs text-slate-500">Cada día inicia con la lista de alumnos en <strong>EN AULA</strong>. En la fecha actual puede informar salida de alumnos <strong>notificados en puerta</strong>.</p>
             </div>
             ${renderModalidadBadge(sInfo)}
           </div>
+          ${renderDateSelectorBar(currentUser.codigoSede)}
           <div class="overflow-x-auto border border-slate-200 rounded-xl">
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
@@ -2041,10 +2578,12 @@
               </thead>
               <tbody class="divide-y divide-slate-100">
                 ${list.length ? list.map(s => {
-                  const canInformLeaving = s.estado === FLOW_STATES.NOTIFICADO;
+                  const canInformLeaving = isToday && s.estado === FLOW_STATES.NOTIFICADO;
                   let actionCell = '';
                   if (canInformLeaving) {
                     actionCell = `<button type="button" onclick="tutorInformLeavingClassroom('${s.codigoAlumno}')" class="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-[11px] shadow-sm">Informar Salida de Aula</button>`;
+                  } else if (!isToday) {
+                    actionCell = `<span class="text-[11px] text-amber-700 font-semibold">Histórico (${selectedOperationalDate})</span>`;
                   } else if (s.estado === FLOW_STATES.EN_AULA) {
                     actionCell = `<span class="text-[11px] text-slate-400 font-medium">Esperando aviso de policía</span>`;
                   } else {
@@ -2067,14 +2606,16 @@
           </div>
         </div>
       `;
+
+      bindDateSelectorEvents(() => renderActiveTab());
     }
 
     function renderTutorImport(container) {
       const sInfo = getSedeInfo(currentUser.codigoSede);
       const hasInicial = sInfo.niveles.includes('Inicial');
       const levelOptions = hasInicial
-        ? `<option value="Inicial">Inicial (Salida 13:00)</option><option value="Primaria">Primaria (Salida 14:30)</option>`
-        : `<option value="Primaria">Primaria (Salida 14:30) — Sede Solo Primaria</option>`;
+        ? `<option value="Inicial">Inicial</option><option value="Primaria">Primaria</option>`
+        : `<option value="Primaria">Primaria — Sede Solo Primaria</option>`;
 
       container.innerHTML = `
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 fade-in">
@@ -2083,7 +2624,7 @@
               <h2 class="text-base font-extrabold text-slate-900">Registrar Alumno en el Sistema</h2>
               ${renderModalidadBadge(sInfo)}
             </div>
-            <p class="text-xs text-slate-500 mb-4">Solo los alumnos registrados pueden ingresar al flujo de salida.</p>
+            <p class="text-xs text-slate-500 mb-4">Los alumnos registrados forman la lista base diaria de la sede.</p>
             <form id="singleStudentForm" class="space-y-3.5">
               <div>
                 <label class="block text-xs font-bold text-slate-700 mb-1">Nombre Completo del Estudiante</label>
@@ -2138,6 +2679,7 @@
         const sedeObj = SEDE_MAP[code];
         const selectedNivel = document.getElementById('stuNivel').value;
         const nivel = sedeObj.niveles.includes(selectedNivel) ? selectedNivel : 'Primaria';
+        const times = getSedeOfficialTimes(code, nivel);
         const seq = appState.students.filter(s => s.codigoSede === code).length + 1;
         const newStudent = {
           codigoSede: code,
@@ -2148,7 +2690,8 @@
           aula: document.getElementById('stuAula').value.trim(),
           tutor: currentUser.nombre,
           policia: sedeObj.pol,
-          salidaOficial: nivel === 'Inicial' ? '13:00' : '14:30',
+          ingresoOficial: times.ingreso,
+          salidaOficial: times.salida,
           estado: FLOW_STATES.EN_AULA,
           quienRecogio: '—',
           dniFamiliar: document.getElementById('stuDniFam').value.trim(),
@@ -2160,6 +2703,7 @@
           telefonoApoderado: document.getElementById('stuCel').value.trim()
         };
         appState.students.push(newStudent);
+        ensureDailySnapshotForDate(getTodayDateISO());
         appendProcessLog(newStudent, 'ALUMNO REGISTRADO EN SISTEMA');
         saveState();
         pushToGoogleSheets('ADD_STUDENTS', { students: [newStudent], sedeTab: sedeObj.tab });
@@ -2178,6 +2722,7 @@
       const hasInicial = sedeObj.niveles.includes('Inicial');
       const inferredAula = file.name.replace(/\.(xlsx|xls|csv)$/i, '').replace(/[_-]+/g, ' ').trim();
       const inferredNivel = (hasInicial && /INICIAL|3\s*AÑOS|4\s*AÑOS|5\s*AÑOS/i.test(inferredAula)) ? 'Inicial' : 'Primaria';
+      const times = getSedeOfficialTimes(code, inferredNivel);
 
       const reader = new FileReader();
       reader.onload = (evt) => {
@@ -2227,7 +2772,8 @@
             aula: idxAula >= 0 && row[idxAula] ? String(row[idxAula]).trim() : inferredAula,
             tutor: currentUser.nombre,
             policia: sedeObj.pol,
-            salidaOficial: inferredNivel === 'Inicial' ? '13:00' : '14:30',
+            ingresoOficial: times.ingreso,
+            salidaOficial: times.salida,
             estado: FLOW_STATES.EN_AULA,
             quienRecogio: '—',
             dniFamiliar: idxDni >= 0 && row[idxDni] ? String(row[idxDni]).trim() : '—',
@@ -2262,6 +2808,7 @@
       if (!pendingExcelRows.length) return;
       const sedeObj = SEDE_MAP[currentUser.codigoSede];
       appState.students.push(...pendingExcelRows);
+      ensureDailySnapshotForDate(getTodayDateISO());
       appendProcessLog(pendingExcelRows[0], `IMPORTACIÓN EXCEL DE ${pendingExcelRows.length} ALUMNOS REGISTRADOS`);
       saveState();
       pushToGoogleSheets('ADD_STUDENTS', { students: pendingExcelRows, sedeTab: sedeObj.tab });
@@ -2271,13 +2818,11 @@
       showToast(`Se registraron ${total} alumnos.`);
     });
 
-    // POLICÍA (PASOS 1 Y 3):
-    // - Paso 1: Si está EN AULA -> "Notificar a Tutor" (abre modal de familiar/DNI). Una vez notificado, queda bloqueado en Paso 1.
-    // - Paso 3: Si está SALIENDO DEL AULA (informado por tutor) -> "Confirmar Retiro". Una vez RETIRADO, queda bloqueado.
     function renderPoliceDashboard(container) {
       const sInfo = getSedeInfo(currentUser.codigoSede);
       const perms = new Set(currentUser.permisosPolicia || []);
-      const sedeStudents = appState.students.filter(s => s.codigoSede === currentUser.codigoSede);
+      const isToday = selectedOperationalDate === getTodayDateISO();
+      const sedeStudents = getStudentsForSedeAndDate(currentUser.codigoSede, selectedOperationalDate);
 
       if (!perms.size) {
         container.innerHTML = `
@@ -2293,10 +2838,11 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <div>
               <h2 class="text-base font-extrabold text-slate-900">Control en Puerta (Pasos 1 y 3) — ${sInfo.name}</h2>
-              <p class="text-xs text-slate-500">Solo alumnos registrados. <strong>Paso 1:</strong> Notifique al tutor cuando llegue el familiar. <strong>Paso 3:</strong> Confirme el retiro cuando el tutor informe que sale del aula. Los pasos registrados quedan bloqueados en esta vista.</p>
+              <p class="text-xs text-slate-500">Cada día inicia con la lista de alumnos en <strong>EN AULA</strong>. <strong>Paso 1:</strong> Notifique al tutor cuando llegue el familiar. <strong>Paso 3:</strong> Confirme el retiro cuando el tutor informe que sale del aula.</p>
             </div>
             ${renderModalidadBadge(sInfo)}
           </div>
+          ${renderDateSelectorBar(currentUser.codigoSede)}
           <div class="overflow-x-auto border border-slate-200 rounded-xl">
             <table class="w-full text-left text-xs">
               <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
@@ -2311,7 +2857,9 @@
               <tbody class="divide-y divide-slate-100">
                 ${sedeStudents.length ? sedeStudents.map(s => {
                   let actionBtn = '';
-                  if (s.estado === FLOW_STATES.EN_AULA) {
+                  if (!isToday) {
+                    actionBtn = `<span class="text-[11px] text-amber-700 font-semibold">Histórico (${selectedOperationalDate})</span>`;
+                  } else if (s.estado === FLOW_STATES.EN_AULA) {
                     actionBtn = `<button type="button" onclick="openPoliceNotifyModal('${s.codigoAlumno}')" class="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px]">Paso 1: Notificar Tutor</button>`;
                   } else if (s.estado === FLOW_STATES.NOTIFICADO) {
                     actionBtn = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-bold text-[11px]" title="Paso 1 ya registrado; esperando Paso 2 del tutor">🔒 Notificado (${s.horaNotificacionPolicia}) • Esp. Tutor</span>`;
@@ -2336,6 +2884,8 @@
           </div>
         </div>
       `;
+
+      bindDateSelectorEvents(() => renderActiveTab());
     }
 
     // =========================================================================
@@ -2360,11 +2910,14 @@
         'DNI Familiar': b.dniFamiliar,
         'Hora Notif. Policía': b.horaPuerta,
         'Hora Salida Tutor': b.horaSalidaTutor,
-        'Usuario Ejecutor': b.ejecutor
+        'Usuario Ejecutor': b.ejecutor,
+        'Detalle Completo': b.detalle || ''
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bitData.length ? bitData : [{ Info: 'Sin eventos recientes' }]), INTERNAL_SYSTEM_CONFIG.tabs.BITACORA);
 
-      const aluData = appState.students.map(s => ({
+      const dayStudents = getStudentsForSedeAndDate('ALL', selectedOperationalDate);
+      const aluData = dayStudents.map(s => ({
+        'Fecha': selectedOperationalDate,
         'Código Sede': s.codigoSede,
         'Sede Institucional': s.sedeNombre,
         'Modalidad Sede': getSedeInfo(s.codigoSede).nivelesLabel,
@@ -2374,6 +2927,7 @@
         'Aula / Sección': s.aula,
         'Tutor Asignado': s.tutor,
         'Policía de Sede': s.policia,
+        'Ingreso Oficial': s.ingresoOficial,
         'Salida Oficial': s.salidaOficial,
         'Estado Actual': s.estado,
         'Quién Recogió': s.quienRecogio,
@@ -2386,7 +2940,7 @@
       }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(aluData.length ? aluData : [{ Info: 'Sin alumnos' }]), INTERNAL_SYSTEM_CONFIG.tabs.ALUMNOS);
 
-      XLSX.writeFile(wb, 'AulaSalida_Smart_Flujo_3_Pasos.xlsx');
+      XLSX.writeFile(wb, `AulaSalida_Smart_${selectedOperationalDate}.xlsx`);
       showToast('Reporte Excel exportado.');
     }
 
@@ -2424,90 +2978,6 @@
     }
 
     syncAllFromGoogleSheets(true);
-
-
-    function getTodayDateISO() {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const d = String(now.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-
-    let selectedOperationalDate = getTodayDateISO();
-    let autoSyncTimerId = null;
-
-    function buildDefaultSchedules() {
-      const map = {};
-      SEDES_OFICIALES.forEach((s) => {
-        const hasInicial = s.niveles.includes('Inicial');
-        map[s.code] = {
-          ingresoInicial: hasInicial ? '08:00' : '—',
-          salidaInicial: hasInicial ? '13:00' : '—',
-          ingresoPrimaria: '07:45',
-          salidaPrimaria: '14:30'
-        };
-      });
-      return map;
-    }
-
-    function ensureSchedulesState(stateObj) {
-      const defs = buildDefaultSchedules();
-      if (!stateObj.schedules || typeof stateObj.schedules !== 'object') {
-        stateObj.schedules = defs;
-        return;
-      }
-      SEDES_OFICIALES.forEach((s) => {
-        const cur = stateObj.schedules[s.code] || {};
-        const hasInicial = s.niveles.includes('Inicial');
-        stateObj.schedules[s.code] = {
-          ingresoInicial: hasInicial ? (cur.ingresoInicial || defs[s.code].ingresoInicial) : '—',
-          salidaInicial: hasInicial ? (cur.salidaInicial || defs[s.code].salidaInicial) : '—',
-          ingresoPrimaria: cur.ingresoPrimaria || defs[s.code].ingresoPrimaria,
-          salidaPrimaria: cur.salidaPrimaria || defs[s.code].salidaPrimaria
-        };
-      });
-    }
-
-    function getSedeOfficialTimes(code, nivel) {
-      const sc = (appState.schedules && appState.schedules[code]) || buildDefaultSchedules()[code] || {};
-      if (nivel === 'Inicial') {
-        return {
-          ingreso: sc.ingresoInicial && sc.ingresoInicial !== '—' ? sc.ingresoInicial : '08:00',
-          salida: sc.salidaInicial && sc.salidaInicial !== '—' ? sc.salidaInicial : '13:00'
-        };
-      }
-      return {
-        ingreso: sc.ingresoPrimaria || '07:45',
-        salida: sc.salidaPrimaria || '14:30'
-      };
-    }
-
-    function startAutoSyncLoop() {
-      stopAutoSyncLoop();
-      autoSyncTimerId = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          syncAllFromGoogleSheets(true);
-        }
-      }, 12000);
-    }
-
-    function stopAutoSyncLoop() {
-      if (autoSyncTimerId) {
-        clearInterval(autoSyncTimerId);
-        autoSyncTimerId = null;
-      }
-    }
-
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        syncAllFromGoogleSheets(true);
-      }
-    });
-
-    window.addEventListener('focus', () => {
-      syncAllFromGoogleSheets(true);
-    });
   </script>
 </body>
 </html>
