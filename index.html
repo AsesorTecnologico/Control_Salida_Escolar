@@ -88,7 +88,7 @@
     // =========================================================================
     // 1. SEDES, GRADOS DISPONIBLES Y PERFILES DE ACCESO POR SEDE
     // =========================================================================
-    const STORAGE_KEY = 'aulasalida_smart_flow_v10';
+    const STORAGE_KEY = 'aulasalida_smart_flow_v11';
     const SHEETS_WEBHOOK_URL = '';
 
     const ASISTENCIA = {
@@ -298,7 +298,7 @@
     }
 
     // =========================================================================
-    // 3. ESTADO DIARIO, AULAS PERMANENTES, HORARIO GLOBAL Y MIGRACIÓN
+    // 3. ESTADO DIARIO, AULAS PERMANENTES, HORARIOS POR SEDE Y MIGRACIÓN
     // =========================================================================
     function buildDefaultHorarioGlobal() {
       return {
@@ -307,6 +307,40 @@
         diasActivos: 'Lunes a Viernes',
         actualizadoEn: getTodayISO()
       };
+    }
+
+    function buildDefaultHorariosPorSede(baseHorario = buildDefaultHorarioGlobal()) {
+      const map = {};
+      SEDES_Y_GRADOS.forEach(s => {
+        map[s.codigoSede] = {
+          codigoSede: s.codigoSede,
+          nombreSede: s.nombreSede,
+          horaInicioSalida: baseHorario.horaInicioSalida,
+          horaFinSalida: baseHorario.horaFinSalida,
+          diasActivos: baseHorario.diasActivos,
+          actualizadoEn: baseHorario.actualizadoEn || getTodayISO()
+        };
+      });
+      return map;
+    }
+
+    function getHorarioDeSede(sedeCode) {
+      const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
+      if (!appState.horariosPorSede) {
+        appState.horariosPorSede = buildDefaultHorariosPorSede(hg);
+      }
+      if (!appState.horariosPorSede[sedeCode]) {
+        const s = getSedeConfig(sedeCode);
+        appState.horariosPorSede[sedeCode] = {
+          codigoSede: s.codigoSede,
+          nombreSede: s.nombreSede,
+          horaInicioSalida: hg.horaInicioSalida,
+          horaFinSalida: hg.horaFinSalida,
+          diasActivos: hg.diasActivos,
+          actualizadoEn: getTodayISO()
+        };
+      }
+      return appState.horariosPorSede[sedeCode];
     }
 
     function buildDefaultAulasPermanentes() {
@@ -328,6 +362,9 @@
       const horarioGlobal = preserveAulasAndHorario && preserveAulasAndHorario.horario
         ? preserveAulasAndHorario.horario
         : buildDefaultHorarioGlobal();
+      const horariosPorSede = preserveAulasAndHorario && preserveAulasAndHorario.horariosPorSede
+        ? preserveAulasAndHorario.horariosPorSede
+        : buildDefaultHorariosPorSede(horarioGlobal);
 
       const tbl_alumnos = [
         { codigoAlumno: 'ALU-101', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Mateo Quispe Ramos', grado: '3° Grado A', aula: 'Aula 101', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alarmaActiva: false, fechaDia: today },
@@ -341,6 +378,7 @@
       return {
         fechaOperativa: today,
         horarioGlobal,
+        horariosPorSede,
         accessProfiles,
         tbl_aulas_permanentes,
         tbl_alumnos,
@@ -399,6 +437,9 @@
         if (!parsed.horarioGlobal) {
           parsed.horarioGlobal = buildDefaultHorarioGlobal();
         }
+        if (!parsed.horariosPorSede) {
+          parsed.horariosPorSede = buildDefaultHorariosPorSede(parsed.horarioGlobal);
+        }
         ensureDayRollover(parsed);
         return parsed;
       } catch (e) {
@@ -436,7 +477,8 @@
       if (!currentUser || currentUser.perfil !== 'ADMINISTRADOR') return;
       const fresh = buildFreshTablesState({
         aulas: appState.tbl_aulas_permanentes,
-        horario: appState.horarioGlobal
+        horario: appState.horarioGlobal,
+        horariosPorSede: appState.horariosPorSede
       });
       appState = fresh;
       saveState(appState);
@@ -451,8 +493,13 @@
       const hEl = document.getElementById('horarioOperativoBadge');
       if (fEl) fEl.textContent = `Día: ${appState.fechaOperativa}`;
       if (hEl) {
-        const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
-        hEl.textContent = `Horario: ${hg.horaInicioSalida} - ${hg.horaFinSalida}`;
+        if (currentUser && currentUser.perfil !== 'ADMINISTRADOR' && currentUser.codigoSede !== 'TODAS') {
+          const hs = getHorarioDeSede(currentUser.codigoSede);
+          hEl.textContent = `Horario (${hs.codigoSede}): ${hs.horaInicioSalida} - ${hs.horaFinSalida}`;
+        } else {
+          const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
+          hEl.textContent = `Horario Base: ${hg.horaInicioSalida} - ${hg.horaFinSalida}`;
+        }
       }
     }
 
@@ -1398,69 +1445,169 @@
     }
 
     // =========================================================================
-    // 7. HORARIO GLOBAL CONFIGURADO DESDE ADMINISTRADOR PARA TODAS LAS SEDES
+    // 7. HORARIOS POR SEDE (EDITAR, ACTUALIZAR Y ELIMINAR) + HORARIO BASE GLOBAL
     // =========================================================================
+    let selectedSedeHorarioEdit = SEDES_Y_GRADOS[0].codigoSede;
+
+    function eliminarHorarioDeSede(codigoSede) {
+      const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
+      const s = getSedeConfig(codigoSede);
+      if (!appState.horariosPorSede) {
+        appState.horariosPorSede = buildDefaultHorariosPorSede(hg);
+      }
+      appState.horariosPorSede[codigoSede] = {
+        codigoSede: s.codigoSede,
+        nombreSede: s.nombreSede,
+        horaInicioSalida: '—',
+        horaFinSalida: '—',
+        diasActivos: 'Sin horario asignado',
+        actualizadoEn: getTodayISO()
+      };
+      saveState();
+      updateHeaderBadges();
+      syncTableEvent('DELETE_HORARIO_SEDE', { codigoSede });
+      renderCurrentTab();
+      showToast(`Horario eliminado para ${s.nombreSede}.`);
+    }
+
     function renderHorarioGlobalAdmin(container) {
       const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
+      if (!appState.horariosPorSede) {
+        appState.horariosPorSede = buildDefaultHorariosPorSede(hg);
+      }
+
+      const sedeEdit = getSedeConfig(selectedSedeHorarioEdit);
+      const horarioSedeActual = getHorarioDeSede(selectedSedeHorarioEdit);
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm h-fit">
-              <h2 class="text-base font-extrabold text-slate-900 mb-1">Horario Global de Salida</h2>
-              <p class="text-xs text-slate-500 mb-4">Configuración centralizada desde Administrador aplicada a todas las sedes disponibles.</p>
+            <!-- EDITAR / ACTUALIZAR HORARIO DE UNA SEDE ESPECÍFICA -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm h-fit space-y-5">
+              <div>
+                <h2 class="text-base font-extrabold text-slate-900 mb-1">Editar / Actualizar Horario por Sede</h2>
+                <p class="text-xs text-slate-500">Seleccione una sede para editar, actualizar o eliminar su horario individual.</p>
+              </div>
 
-              <form id="horarioGlobalForm" class="space-y-3.5">
+              <form id="horarioSedeForm" class="space-y-3.5">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Sede</label>
+                  <select id="selHorarioSede"
+                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-900">
+                    ${SEDES_Y_GRADOS.map(s => `<option value="${s.codigoSede}" ${s.codigoSede === selectedSedeHorarioEdit ? 'selected' : ''}>${s.nombreSede}</option>`).join('')}
+                  </select>
+                </div>
+
                 <div>
                   <label class="block text-xs font-bold text-slate-700 mb-1">Hora de Inicio</label>
-                  <input id="inpHoraInicio" type="time" required value="${hg.horaInicioSalida}"
+                  <input id="inpSedeHoraInicio" type="time" required
+                    value="${horarioSedeActual.horaInicioSalida && horarioSedeActual.horaInicioSalida !== '—' ? horarioSedeActual.horaInicioSalida : hg.horaInicioSalida}"
                     class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
                 </div>
 
                 <div>
                   <label class="block text-xs font-bold text-slate-700 mb-1">Hora de Término</label>
-                  <input id="inpHoraFin" type="time" required value="${hg.horaFinSalida}"
+                  <input id="inpSedeHoraFin" type="time" required
+                    value="${horarioSedeActual.horaFinSalida && horarioSedeActual.horaFinSalida !== '—' ? horarioSedeActual.horaFinSalida : hg.horaFinSalida}"
                     class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
                 </div>
 
                 <div>
                   <label class="block text-xs font-bold text-slate-700 mb-1">Días Aplicables</label>
-                  <input id="inpDiasActivos" type="text" required value="${hg.diasActivos}"
+                  <input id="inpSedeDiasActivos" type="text" required
+                    value="${horarioSedeActual.diasActivos && horarioSedeActual.diasActivos !== 'Sin horario asignado' ? horarioSedeActual.diasActivos : hg.diasActivos}"
                     class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs" />
                 </div>
 
-                <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
-                  Guardar Horario para Todas las Sedes
-                </button>
+                <div class="flex items-center gap-2 pt-1">
+                  <button type="submit" class="flex-1 py-2.5 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
+                    Actualizar Horario de Sede
+                  </button>
+                  <button id="btnEliminarHorarioSedeActual" type="button"
+                    class="py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow transition">
+                    Eliminar
+                  </button>
+                </div>
               </form>
+
+              <hr class="border-slate-200" />
+
+              <!-- APLICAR HORARIO BASE A TODAS LAS SEDES -->
+              <div>
+                <h3 class="text-sm font-extrabold text-slate-900 mb-1">Horario Base para Todas las Sedes</h3>
+                <p class="text-xs text-slate-500 mb-3">Aplica un mismo horario base a todas las sedes disponibles.</p>
+
+                <form id="horarioGlobalForm" class="space-y-3">
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-700 mb-1">Inicio Base</label>
+                      <input id="inpHoraInicio" type="time" required value="${hg.horaInicioSalida}"
+                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-bold text-slate-700 mb-1">Fin Base</label>
+                      <input id="inpHoraFin" type="time" required value="${hg.horaFinSalida}"
+                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Días Aplicables</label>
+                    <input id="inpDiasActivos" type="text" required value="${hg.diasActivos}"
+                      class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs" />
+                  </div>
+
+                  <button type="submit" class="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold shadow transition">
+                    Aplicar a Todas las Sedes
+                  </button>
+                </form>
+              </div>
             </div>
 
+            <!-- TABLA DE HORARIOS POR SEDE (EDITAR / ELIMINAR EN FILA) -->
             <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div class="flex items-center justify-between gap-2 mb-3">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div>
-                  <h3 class="text-base font-extrabold text-slate-900">Sedes con Horario Aplicado (${hg.horaInicioSalida} - ${hg.horaFinSalida})</h3>
-                  <p class="text-xs text-slate-500">${SEDES_Y_GRADOS.length} sedes disponibles bajo este horario global.</p>
+                  <h3 class="text-base font-extrabold text-slate-900">Horarios Configurados por Sede</h3>
+                  <p class="text-xs text-slate-500">Editando actualmente: <strong>${sedeEdit.nombreSede}</strong> &bull; ${SEDES_Y_GRADOS.length} sedes disponibles.</p>
                 </div>
-                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800">${hg.diasActivos}</span>
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">${SEDES_Y_GRADOS.length} sedes</span>
               </div>
 
-              <div class="overflow-x-auto border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
+              <div class="overflow-x-auto border border-slate-200 rounded-xl max-h-[540px] overflow-y-auto">
                 <table class="w-full text-left text-xs">
                   <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 sticky top-0">
                     <tr>
-                      <th class="px-3 py-2.5">Código</th>
                       <th class="px-3 py-2.5">Sede</th>
-                      <th class="px-3 py-2.5">Horario Asignado</th>
+                      <th class="px-3 py-2.5">Horario</th>
+                      <th class="px-3 py-2.5">Días</th>
+                      <th class="px-3 py-2.5 text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-100">
-                    ${SEDES_Y_GRADOS.map(s => `
-                      <tr>
-                        <td class="px-3 py-2.5 font-mono font-bold text-slate-700">${s.codigoSede}</td>
-                        <td class="px-3 py-2.5 font-semibold text-slate-900">${s.nombreSede}</td>
-                        <td class="px-3 py-2.5 font-mono text-emerald-800 font-bold">${hg.horaInicioSalida} - ${hg.horaFinSalida}</td>
-                      </tr>
-                    `).join('')}
+                    ${SEDES_Y_GRADOS.map(s => {
+                      const hs = getHorarioDeSede(s.codigoSede);
+                      const sinHorario = hs.horaInicioSalida === '—' || hs.horaFinSalida === '—';
+                      return `
+                        <tr class="${s.codigoSede === selectedSedeHorarioEdit ? 'bg-blue-50/60' : ''}">
+                          <td class="px-3 py-2.5 font-semibold text-slate-900">${s.nombreSede}</td>
+                          <td class="px-3 py-2.5 font-mono font-bold ${sinHorario ? 'text-slate-400' : 'text-emerald-800'}">
+                            ${sinHorario ? 'Sin horario' : `${hs.horaInicioSalida} - ${hs.horaFinSalida}`}
+                          </td>
+                          <td class="px-3 py-2.5 text-slate-600">${hs.diasActivos}</td>
+                          <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
+                            <button type="button" data-edit-horario-sede="${s.codigoSede}"
+                              class="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px]">
+                              Editar
+                            </button>
+                            <button type="button" data-del-horario-sede="${s.codigoSede}"
+                              class="px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px]">
+                              Eliminar
+                            </button>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
                   </tbody>
                 </table>
               </div>
@@ -1469,19 +1616,69 @@
         </div>
       `;
 
-      document.getElementById('horarioGlobalForm').addEventListener('submit', e => {
+      document.getElementById('selHorarioSede').addEventListener('change', e => {
+        selectedSedeHorarioEdit = e.target.value;
+        renderCurrentTab();
+      });
+
+      document.getElementById('horarioSedeForm').addEventListener('submit', e => {
         e.preventDefault();
-        appState.horarioGlobal = {
-          horaInicioSalida: document.getElementById('inpHoraInicio').value,
-          horaFinSalida: document.getElementById('inpHoraFin').value,
-          diasActivos: document.getElementById('inpDiasActivos').value.trim() || 'Lunes a Viernes',
+        const code = document.getElementById('selHorarioSede').value;
+        const s = getSedeConfig(code);
+        const inicio = document.getElementById('inpSedeHoraInicio').value;
+        const fin = document.getElementById('inpSedeHoraFin').value;
+        const dias = document.getElementById('inpSedeDiasActivos').value.trim() || 'Lunes a Viernes';
+
+        appState.horariosPorSede[code] = {
+          codigoSede: s.codigoSede,
+          nombreSede: s.nombreSede,
+          horaInicioSalida: inicio,
+          horaFinSalida: fin,
+          diasActivos: dias,
           actualizadoEn: getTodayISO()
         };
+        selectedSedeHorarioEdit = code;
+        saveState();
+        updateHeaderBadges();
+        syncTableEvent('UPDATE_HORARIO_SEDE', { horarioSede: appState.horariosPorSede[code] });
+        renderCurrentTab();
+        showToast(`Horario actualizado para ${s.nombreSede} (${inicio} - ${fin}).`);
+      });
+
+      document.getElementById('btnEliminarHorarioSedeActual').addEventListener('click', () => {
+        eliminarHorarioDeSede(document.getElementById('selHorarioSede').value);
+      });
+
+      container.querySelectorAll('[data-edit-horario-sede]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selectedSedeHorarioEdit = btn.dataset.editHorarioSede;
+          renderCurrentTab();
+        });
+      });
+
+      container.querySelectorAll('[data-del-horario-sede]').forEach(btn => {
+        btn.addEventListener('click', () => eliminarHorarioDeSede(btn.dataset.delHorarioSede));
+      });
+
+      document.getElementById('horarioGlobalForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const inicio = document.getElementById('inpHoraInicio').value;
+        const fin = document.getElementById('inpHoraFin').value;
+        const dias = document.getElementById('inpDiasActivos').value.trim() || 'Lunes a Viernes';
+        const fechaAct = getTodayISO();
+
+        appState.horarioGlobal = {
+          horaInicioSalida: inicio,
+          horaFinSalida: fin,
+          diasActivos: dias,
+          actualizadoEn: fechaAct
+        };
+        appState.horariosPorSede = buildDefaultHorariosPorSede(appState.horarioGlobal);
         saveState();
         updateHeaderBadges();
         syncTableEvent('UPDATE_HORARIO_GLOBAL', { horarioGlobal: appState.horarioGlobal });
         renderCurrentTab();
-        showToast('Horario global guardado para todas las sedes.');
+        showToast('Horario base aplicado a todas las sedes.');
       });
     }
   </script>
