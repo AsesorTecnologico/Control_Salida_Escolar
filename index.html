@@ -89,7 +89,18 @@
     // 1. SEDES, GRADOS DISPONIBLES Y PERFILES DE ACCESO POR SEDE
     // =========================================================================
     const STORAGE_KEY = 'aulasalida_smart_flow_v15';
+    const SYNC_CHANNEL_NAME = 'aulasalida_smart_sync_v15';
+    const DEFAULT_SYNC_ENDPOINT = 'https://kvdb.io/AulasalidaSmartSedeSync2026/estado_global';
     const SHEETS_WEBHOOK_URL = '';
+
+    const syncChannel = (typeof BroadcastChannel !== 'undefined')
+      ? new BroadcastChannel(SYNC_CHANNEL_NAME)
+      : null;
+
+    let remoteSyncTimer = null;
+    let lastSyncedAt = '';
+    let syncStatusText = 'Local + Pestañas';
+    let isApplyingRemoteState = false;
 
     const ASISTENCIA = {
       PRESENTE: 'PRESENTE',
@@ -540,11 +551,154 @@
       }
     }
 
+    function getSyncEndpoint() {
+      const custom = localStorage.getItem('aulasalida_custom_sync_url');
+      return (custom && custom.trim()) ? custom.trim() : DEFAULT_SYNC_ENDPOINT;
+    }
+
+    function normalizeSyncedState(parsed, fallback = null) {
+      if (!parsed || typeof parsed !== 'object') return fallback;
+      if (!Array.isArray(parsed.tbl_alumnos) || !Array.isArray(parsed.accessProfiles)) {
+        return fallback;
+      }
+      if (!Array.isArray(parsed.tbl_aulas_permanentes)) {
+        parsed.tbl_aulas_permanentes = fallback && Array.isArray(fallback.tbl_aulas_permanentes)
+          ? fallback.tbl_aulas_permanentes
+          : buildDefaultAulasPermanentes();
+      }
+      if (!parsed.horarioGlobal) {
+        parsed.horarioGlobal = (fallback && fallback.horarioGlobal) || buildDefaultHorarioGlobal();
+      }
+      if (!parsed.horariosPorNivel) {
+        parsed.horariosPorNivel = (fallback && fallback.horariosPorNivel) || buildDefaultHorariosPorNivel();
+      }
+      if (!parsed.horariosPorSede) {
+        parsed.horariosPorSede = (fallback && fallback.horariosPorSede) || buildDefaultHorariosPorSede(parsed.horarioGlobal);
+      }
+      parsed._updatedAt = Number(parsed._updatedAt || 0);
+      return parsed;
+    }
+
+    function applyIncomingState(incomingRaw, sourceLabel = 'Remoto') {
+      const incoming = normalizeSyncedState(incomingRaw, null);
+      if (!incoming) return false;
+      const currentTs = Number((appState && appState._updatedAt) || 0);
+      const incomingTs = Number(incoming._updatedAt || 0);
+
+      if (incomingTs > 0 && incomingTs <= currentTs) {
+        return false;
+      }
+
+      isApplyingRemoteState = true;
+      try {
+        ensureDayRollover(incoming);
+        appState = incoming;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+        lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        syncStatusText = `${sourceLabel} (${lastSyncedAt})`;
+        updateHeaderBadges();
+        if (currentUser) {
+          renderCurrentTab();
+          syncContinuousAlarmLoop();
+        }
+      } finally {
+        isApplyingRemoteState = false;
+      }
+      return true;
+    }
+
+    async function pushStateToCloud(st) {
+      const endpoint = getSyncEndpoint();
+      if (!endpoint) return;
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(st)
+        });
+        if (res.ok) {
+          lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+          syncStatusText = `Nube OK (${lastSyncedAt})`;
+          updateHeaderBadges();
+        } else {
+          syncStatusText = 'Local (sin red nube)';
+          updateHeaderBadges();
+        }
+      } catch (_) {
+        syncStatusText = 'Local (sin conexión)';
+        updateHeaderBadges();
+      }
+    }
+
+    async function pullStateFromCloud(forceApply = false) {
+      const endpoint = getSyncEndpoint();
+      if (!endpoint) return false;
+      try {
+        const sep = endpoint.includes('?') ? '&' : '?';
+        const res = await fetch(`${endpoint}${sep}_t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) return false;
+        const remoteData = await res.json();
+        const norm = normalizeSyncedState(remoteData, null);
+        if (!norm) return false;
+
+        const currentTs = Number((appState && appState._updatedAt) || 0);
+        const remoteTs = Number(norm._updatedAt || 0);
+
+        if (forceApply || remoteTs > currentTs) {
+          return applyIncomingState(norm, 'Nube');
+        }
+        lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        syncStatusText = `Sincronizado (${lastSyncedAt})`;
+        updateHeaderBadges();
+        return false;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function startCloudSyncLoop() {
+      if (remoteSyncTimer) clearInterval(remoteSyncTimer);
+      pullStateFromCloud(false);
+      remoteSyncTimer = setInterval(() => {
+        pullStateFromCloud(false);
+      }, 2500);
+    }
+
     function saveState(st = appState) {
+      if (!st || typeof st !== 'object') return;
+      if (!isApplyingRemoteState) {
+        st._updatedAt = Date.now();
+      }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(st));
+      if (!isApplyingRemoteState) {
+        if (syncChannel) {
+          try {
+            syncChannel.postMessage({ type: 'STATE_UPDATED', state: st });
+          } catch (_) {}
+        }
+        pushStateToCloud(st);
+      }
+    }
+
+    window.addEventListener('storage', e => {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          applyIncomingState(parsed, 'Navegador');
+        } catch (_) {}
+      }
+    });
+
+    if (syncChannel) {
+      syncChannel.onmessage = event => {
+        if (event && event.data && event.data.type === 'STATE_UPDATED' && event.data.state) {
+          applyIncomingState(event.data.state, 'Pestaña');
+        }
+      };
     }
 
     async function syncTableEvent(action, payload) {
+      saveState(appState);
       if (!SHEETS_WEBHOOK_URL) return;
       try {
         await fetch(SHEETS_WEBHOOK_URL, {
@@ -590,7 +744,7 @@
         const hn = appState.horariosPorNivel || buildDefaultHorariosPorNivel();
         const ini = hn.Inicial || { horaIngreso: '08:30', horaSalida: '13:30' };
         const pri = hn.Primaria || { horaIngreso: '07:45', horaSalida: '13:50' };
-        hEl.textContent = `Inicial ${ini.horaIngreso}-${ini.horaSalida} | Primaria ${pri.horaIngreso}-${pri.horaSalida}`;
+        hEl.textContent = `Inicial ${ini.horaIngreso}-${ini.horaSalida} | Primaria ${pri.horaIngreso}-${pri.horaSalida} • Sync: ${syncStatusText}`;
       }
     }
 
@@ -678,6 +832,8 @@
     function enterApp(acc) {
       currentUser = acc;
       editingAulaId = null;
+      startCloudSyncLoop();
+      pullStateFromCloud(false);
       ensureDayRollover(appState);
       updateHeaderBadges();
       renderHeaderActionsForRole();
@@ -1709,6 +1865,14 @@
         btn.addEventListener('click', () => terminarProcesoSalida(btn.dataset.terminarAula));
       });
 
+      if (!window.__aulaAutoRefreshTimer) {
+        window.__aulaAutoRefreshTimer = setInterval(() => {
+          if (currentUser && currentUser.perfil === 'TUTOR_AULA' && activeTab === 'aulaModule') {
+            pullStateFromCloud(false);
+            syncContinuousAlarmLoop();
+          }
+        }, 2000);
+      }
       syncContinuousAlarmLoop();
     }
 
