@@ -88,7 +88,7 @@
     // =========================================================================
     // 1. SEDES, GRADOS DISPONIBLES Y PERFILES DE ACCESO POR SEDE
     // =========================================================================
-    const STORAGE_KEY = 'aulasalida_smart_flow_v12';
+    const STORAGE_KEY = 'aulasalida_smart_flow_v13';
     const SHEETS_WEBHOOK_URL = '';
 
     const ASISTENCIA = {
@@ -608,8 +608,7 @@
     function getTabsForRole(perfil) {
       if (perfil === 'TUTOR_PUERTA') {
         return [
-          { id: 'tutorFlow', label: 'Flujo Puerta y Procesos (Sede)' },
-          { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Sede)' }
+          { id: 'tutorFlow', label: 'Flujo Puerta y Procesos (Sede)' }
         ];
       }
       if (perfil === 'TUTOR_AULA') {
@@ -650,6 +649,10 @@
       updateHeaderBadges();
       const container = document.getElementById('mainContent');
       if (activeTab === 'cargaAlumnos') {
+        if (currentUser && currentUser.perfil === 'TUTOR_PUERTA') {
+          activeTab = 'tutorFlow';
+          return renderTutorGateFlow(container);
+        }
         stopContinuousAlarmLoop();
         return renderCargaAlumnosYAulasPorSede(container);
       }
