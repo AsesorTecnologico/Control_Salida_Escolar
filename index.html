@@ -91,7 +91,8 @@
     const STORAGE_KEY = 'aulasalida_smart_flow_v15';
     const SYNC_CHANNEL_NAME = 'aulasalida_smart_sync_v15';
     const DEFAULT_SYNC_BUCKET_ID = 'aulasalida_smart_sede_sync_2026_v1';
-    const SHEETS_WEBHOOK_URL = '';
+    const APPS_SCRIPT_WEB_APP_URL = '';
+    const SHEETS_WEBHOOK_URL = APPS_SCRIPT_WEB_APP_URL;
 
     const syncChannel = (typeof BroadcastChannel !== 'undefined')
       ? new BroadcastChannel(SYNC_CHANNEL_NAME)
@@ -561,13 +562,26 @@
       return (custom && custom.trim()) ? custom.trim() : DEFAULT_SYNC_BUCKET_ID;
     }
 
-    function getSyncEndpoints() {
+    function getConfiguredScriptUrl() {
       const customUrl = localStorage.getItem('aulasalida_custom_sync_url');
-      if (customUrl && customUrl.trim()) {
-        return [{ type: 'custom', pushUrl: customUrl.trim(), pullUrl: customUrl.trim(), method: 'POST' }];
-      }
+      if (customUrl && customUrl.trim()) return customUrl.trim();
+      if (APPS_SCRIPT_WEB_APP_URL && APPS_SCRIPT_WEB_APP_URL.trim()) return APPS_SCRIPT_WEB_APP_URL.trim();
+      return '';
+    }
+
+    function getSyncEndpoints() {
+      const scriptUrl = getConfiguredScriptUrl();
       const bucket = encodeURIComponent(getSyncBucketId());
-      return [
+      const list = [];
+      if (scriptUrl) {
+        list.push({
+          type: 'apps_script',
+          pushUrl: scriptUrl,
+          pullUrl: scriptUrl,
+          method: 'POST'
+        });
+      }
+      list.push(
         {
           type: 'kvdb',
           pushUrl: `https://kvdb.io/${bucket}/estado_global`,
@@ -580,7 +594,8 @@
           pullUrl: `https://ntfy.sh/${bucket}_aulasalida_state/raw`,
           method: 'PUT'
         }
-      ];
+      );
+      return list;
     }
 
     function normalizeSyncedState(parsed, fallback = null) {
@@ -647,13 +662,38 @@
       return true;
     }
 
-    async function pushStateToCloud(st) {
+    async function pushStateToCloud(st, actionName = 'SYNC_STATE', extraPayload = {}) {
       const endpoints = getSyncEndpoints();
       const payloadStr = JSON.stringify(st);
-      if (payloadStr === lastPushedSerialized) return true;
+      if (payloadStr === lastPushedSerialized && actionName === 'SYNC_STATE') return true;
 
+      let sentToAny = false;
       for (const ep of endpoints) {
         try {
+          if (ep.type === 'apps_script') {
+            const scriptBody = JSON.stringify(Object.assign({
+              action: actionName,
+              state: st
+            }, extraPayload || {}));
+            await fetch(ep.pushUrl, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: scriptBody
+            });
+            sentToAny = true;
+            lastPushedSerialized = payloadStr;
+            remoteSyncSource = 'SHEETS';
+            lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            syncStatusText = `Sheets OK (${lastSyncedAt})`;
+            updateHeaderBadges();
+            continue;
+          }
+
+          if (sentToAny && ep.type !== 'apps_script') {
+            continue;
+          }
+
           const res = await fetch(ep.pushUrl, {
             method: ep.method || 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -669,6 +709,8 @@
           }
         } catch (_) {}
       }
+
+      if (sentToAny) return true;
 
       syncStatusText = 'Reintentando nube...';
       updateHeaderBadges();
@@ -688,13 +730,16 @@
             const text = await res.text();
             if (!text || !text.trim()) continue;
             let remoteData = JSON.parse(text);
+            if (remoteData && typeof remoteData === 'object' && remoteData.ok === true && remoteData.state) {
+              remoteData = remoteData.state;
+            }
             if (remoteData && typeof remoteData === 'object' && typeof remoteData.message === 'string') {
               try { remoteData = JSON.parse(remoteData.message); } catch (_) {}
             }
             const norm = normalizeSyncedState(remoteData, null);
             if (!norm) continue;
 
-            remoteSyncSource = ep.type.toUpperCase();
+            remoteSyncSource = ep.type === 'apps_script' ? 'SHEETS' : ep.type.toUpperCase();
             const currentTs = Number((appState && appState._updatedAt) || 0);
             const remoteTs = Number(norm._updatedAt || 0);
 
@@ -702,7 +747,7 @@
               return applyIncomingState(norm, remoteSyncSource);
             }
             lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-            syncStatusText = `Nube ${remoteSyncSource} (${lastSyncedAt})`;
+            syncStatusText = `${remoteSyncSource} (${lastSyncedAt})`;
             updateHeaderBadges();
             return false;
           } catch (_) {}
@@ -765,17 +810,16 @@
       };
     }
 
-    async function syncTableEvent(action, payload) {
-      saveState(appState);
-      if (!SHEETS_WEBHOOK_URL) return;
-      try {
-        await fetch(SHEETS_WEBHOOK_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, ...payload })
-        });
-      } catch (_) {}
+    async function syncTableEvent(action, payload = {}) {
+      if (!appState || typeof appState !== 'object') return;
+      appState._updatedAt = Date.now();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      if (syncChannel) {
+        try {
+          syncChannel.postMessage({ type: 'STATE_UPDATED', state: appState });
+        } catch (_) {}
+      }
+      await pushStateToCloud(appState, action, payload);
     }
 
     function migrarAlumnosSiguienteDiaManual() {
