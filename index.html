@@ -90,7 +90,7 @@
     // =========================================================================
     const STORAGE_KEY = 'aulasalida_smart_flow_v15';
     const SYNC_CHANNEL_NAME = 'aulasalida_smart_sync_v15';
-    const DEFAULT_SYNC_ENDPOINT = 'https://kvdb.io/AulasalidaSmartSedeSync2026/estado_global';
+    const DEFAULT_SYNC_BUCKET_ID = 'aulasalida_smart_sede_sync_2026_v1';
     const SHEETS_WEBHOOK_URL = '';
 
     const syncChannel = (typeof BroadcastChannel !== 'undefined')
@@ -99,8 +99,10 @@
 
     let remoteSyncTimer = null;
     let lastSyncedAt = '';
-    let syncStatusText = 'Local + Pestañas';
+    let syncStatusText = 'Conectando...';
     let isApplyingRemoteState = false;
+    let lastPushedSerialized = '';
+    let activeSyncInFlight = false;
 
     const ASISTENCIA = {
       PRESENTE: 'PRESENTE',
@@ -210,6 +212,8 @@
 
       return profiles;
     }
+
+    startCloudSyncLoop();
 
     (function populateLoginSedeSelect() {
       const sel = document.getElementById('loginSede');
@@ -551,9 +555,21 @@
       }
     }
 
-    function getSyncEndpoint() {
-      const custom = localStorage.getItem('aulasalida_custom_sync_url');
-      return (custom && custom.trim()) ? custom.trim() : DEFAULT_SYNC_ENDPOINT;
+    function getSyncBucketId() {
+      const custom = localStorage.getItem('aulasalida_custom_sync_bucket');
+      return (custom && custom.trim()) ? custom.trim() : DEFAULT_SYNC_BUCKET_ID;
+    }
+
+    function getSyncEndpoints() {
+      const customUrl = localStorage.getItem('aulasalida_custom_sync_url');
+      if (customUrl && customUrl.trim()) {
+        return [{ type: 'custom', url: customUrl.trim() }];
+      }
+      const bucket = encodeURIComponent(getSyncBucketId());
+      return [
+        { type: 'keyvalue', url: `https://api.keyvalue.xyz/new/${bucket}` },
+        { type: 'ntfy', url: `https://ntfy.sh/${bucket}_aulasalida_state` }
+      ];
     }
 
     function normalizeSyncedState(parsed, fallback = null) {
@@ -579,13 +595,25 @@
       return parsed;
     }
 
-    function applyIncomingState(incomingRaw, sourceLabel = 'Remoto') {
+    function hasMeaningfulDiff(a, b) {
+      if (!a || !b) return true;
+      const ca = Object.assign({}, a);
+      const cb = Object.assign({}, b);
+      delete ca._updatedAt;
+      delete cb._updatedAt;
+      return JSON.stringify(ca) !== JSON.stringify(cb);
+    }
+
+    function applyIncomingState(incomingRaw, sourceLabel = 'En línea') {
       const incoming = normalizeSyncedState(incomingRaw, null);
       if (!incoming) return false;
       const currentTs = Number((appState && appState._updatedAt) || 0);
       const incomingTs = Number(incoming._updatedAt || 0);
 
-      if (incomingTs > 0 && incomingTs <= currentTs) {
+      if (incomingTs > 0 && currentTs > 0 && incomingTs < currentTs) {
+        return false;
+      }
+      if (incomingTs > 0 && incomingTs === currentTs && !hasMeaningfulDiff(appState, incoming)) {
         return false;
       }
 
@@ -595,7 +623,7 @@
         appState = incoming;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
         lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-        syncStatusText = `${sourceLabel} (${lastSyncedAt})`;
+        syncStatusText = `En línea (${sourceLabel} ${lastSyncedAt})`;
         updateHeaderBadges();
         if (currentUser) {
           renderCurrentTab();
@@ -608,51 +636,94 @@
     }
 
     async function pushStateToCloud(st) {
-      const endpoint = getSyncEndpoint();
-      if (!endpoint) return;
-      try {
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(st)
-        });
-        if (res.ok) {
-          lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-          syncStatusText = `Nube OK (${lastSyncedAt})`;
-          updateHeaderBadges();
-        } else {
-          syncStatusText = 'Local (sin red nube)';
-          updateHeaderBadges();
-        }
-      } catch (_) {
-        syncStatusText = 'Local (sin conexión)';
-        updateHeaderBadges();
+      const endpoints = getSyncEndpoints();
+      const payloadStr = JSON.stringify(st);
+      if (payloadStr === lastPushedSerialized) return true;
+
+      for (const ep of endpoints) {
+        try {
+          if (ep.type === 'keyvalue') {
+            // keyvalue.xyz uses POST /new/<key> to create/set and POST /<key>/<val> or GET /<key>
+            const keyUrl = ep.url.replace('/new/', '/');
+            const res = await fetch(keyUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payloadStr
+            });
+            if (res.ok) {
+              lastPushedSerialized = payloadStr;
+              lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+              syncStatusText = `En línea (${lastSyncedAt})`;
+              updateHeaderBadges();
+              return true;
+            }
+          } else if (ep.type === 'ntfy') {
+            const res = await fetch(ep.url, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: payloadStr
+            });
+            if (res.ok) {
+              lastPushedSerialized = payloadStr;
+              lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+              syncStatusText = `En línea (${lastSyncedAt})`;
+              updateHeaderBadges();
+              return true;
+            }
+          } else {
+            const res = await fetch(ep.url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: payloadStr
+            });
+            if (res.ok) {
+              lastPushedSerialized = payloadStr;
+              lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+              syncStatusText = `En línea (${lastSyncedAt})`;
+              updateHeaderBadges();
+              return true;
+            }
+          }
+        } catch (_) {}
       }
+
+      syncStatusText = 'Reintentando conexión...';
+      updateHeaderBadges();
+      return false;
     }
 
     async function pullStateFromCloud(forceApply = false) {
-      const endpoint = getSyncEndpoint();
-      if (!endpoint) return false;
+      if (activeSyncInFlight) return false;
+      activeSyncInFlight = true;
+      const endpoints = getSyncEndpoints();
       try {
-        const sep = endpoint.includes('?') ? '&' : '?';
-        const res = await fetch(`${endpoint}${sep}_t=${Date.now()}`, { cache: 'no-store' });
-        if (!res.ok) return false;
-        const remoteData = await res.json();
-        const norm = normalizeSyncedState(remoteData, null);
-        if (!norm) return false;
+        for (const ep of endpoints) {
+          try {
+            const targetUrl = ep.type === 'keyvalue' ? ep.url.replace('/new/', '/') : ep.url;
+            const sep = targetUrl.includes('?') ? '&' : '?';
+            const res = await fetch(`${targetUrl}${sep}_t=${Date.now()}`, { cache: 'no-store' });
+            if (!res.ok) continue;
+            const text = await res.text();
+            if (!text || !text.trim()) continue;
+            const remoteData = JSON.parse(text);
+            const norm = normalizeSyncedState(remoteData, null);
+            if (!norm) continue;
 
-        const currentTs = Number((appState && appState._updatedAt) || 0);
-        const remoteTs = Number(norm._updatedAt || 0);
+            const currentTs = Number((appState && appState._updatedAt) || 0);
+            const remoteTs = Number(norm._updatedAt || 0);
 
-        if (forceApply || remoteTs > currentTs) {
-          return applyIncomingState(norm, 'Nube');
+            if (forceApply || remoteTs > currentTs || hasMeaningfulDiff(appState, norm)) {
+              return applyIncomingState(norm, 'PC/Remoto');
+            }
+            lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            syncStatusText = `En línea (${lastSyncedAt})`;
+            updateHeaderBadges();
+            return false;
+          } catch (_) {}
         }
-        lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-        syncStatusText = `Sincronizado (${lastSyncedAt})`;
-        updateHeaderBadges();
         return false;
-      } catch (_) {
-        return false;
+      } finally {
+        activeSyncInFlight = false;
       }
     }
 
@@ -660,9 +731,20 @@
       if (remoteSyncTimer) clearInterval(remoteSyncTimer);
       pullStateFromCloud(false);
       remoteSyncTimer = setInterval(() => {
+        if (document.visibilityState === 'hidden') return;
         pullStateFromCloud(false);
-      }, 2500);
+      }, 1500);
     }
+
+    window.addEventListener('focus', () => {
+      pullStateFromCloud(false);
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        pullStateFromCloud(false);
+      }
+    });
 
     function saveState(st = appState) {
       if (!st || typeof st !== 'object') return;
