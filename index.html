@@ -91,8 +91,9 @@
     const STORAGE_KEY = 'aulasalida_smart_flow_v15';
     const SYNC_CHANNEL_NAME = 'aulasalida_smart_sync_v15';
     const DEFAULT_SYNC_BUCKET_ID = 'aulasalida_smart_sede_sync_2026_v1';
+    // Proyecto Apps Script: 16XxLcY6erXba6kZULeaqC7bvV3pXXK1A99qSwlNN9O2alv7HpDmkwTSH
+    // Coloca aquí la URL de implementación Web App (termina en /exec, no /edit):
     const APPS_SCRIPT_WEB_APP_URL = '';
-    const SHEETS_WEBHOOK_URL = APPS_SCRIPT_WEB_APP_URL;
 
     const syncChannel = (typeof BroadcastChannel !== 'undefined')
       ? new BroadcastChannel(SYNC_CHANNEL_NAME)
@@ -633,24 +634,37 @@
     function applyIncomingState(incomingRaw, sourceLabel = 'Remoto') {
       const incoming = normalizeSyncedState(incomingRaw, null);
       if (!incoming) return false;
+
       const currentTs = Number((appState && appState._updatedAt) || 0);
       const incomingTs = Number(incoming._updatedAt || 0);
 
+      // Si ambos tienen timestamp y el entrante es estrictamente más antiguo, ignorar
       if (incomingTs > 0 && currentTs > 0 && incomingTs < currentTs) {
         return false;
       }
-      if (incomingTs > 0 && incomingTs === currentTs && !hasMeaningfulDiff(appState, incoming)) {
+
+      const diffExists = hasMeaningfulDiff(appState, incoming);
+      // Si el timestamp es igual y no hay cambios reales, no re-renderizar innecesariamente
+      if (incomingTs > 0 && incomingTs === currentTs && !diffExists) {
+        return false;
+      }
+      // Si no hay timestamp pero tampoco hay diferencia real, no tocar la vista
+      if (!incomingTs && !diffExists) {
         return false;
       }
 
       isApplyingRemoteState = true;
       try {
+        // Conserva el timestamp más reciente si el entrante no traía uno mayor
+        if (!incoming._updatedAt || (currentTs > 0 && incoming._updatedAt < currentTs)) {
+          incoming._updatedAt = currentTs || Date.now();
+        }
         ensureDayRollover(incoming);
         appState = incoming;
         lastPushedSerialized = JSON.stringify(appState);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
         lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-        syncStatusText = `Remoto OK (${sourceLabel} ${lastSyncedAt})`;
+        syncStatusText = `Sincronizado (${sourceLabel} ${lastSyncedAt})`;
         updateHeaderBadges();
         if (currentUser) {
           renderCurrentTab();
@@ -663,11 +677,18 @@
     }
 
     async function pushStateToCloud(st, actionName = 'SYNC_STATE', extraPayload = {}) {
+      if (!st || typeof st !== 'object') return false;
+      if (!st._updatedAt) st._updatedAt = Date.now();
+
       const endpoints = getSyncEndpoints();
       const payloadStr = JSON.stringify(st);
-      if (payloadStr === lastPushedSerialized && actionName === 'SYNC_STATE') return true;
+      if (payloadStr === lastPushedSerialized && actionName === 'SYNC_STATE') {
+        return true;
+      }
 
-      let sentToAny = false;
+      syncStatusText = 'Sincronizando...';
+      updateHeaderBadges();
+
       for (const ep of endpoints) {
         try {
           if (ep.type === 'apps_script') {
@@ -681,17 +702,12 @@
               headers: { 'Content-Type': 'text/plain;charset=utf-8' },
               body: scriptBody
             });
-            sentToAny = true;
             lastPushedSerialized = payloadStr;
             remoteSyncSource = 'SHEETS';
             lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
             syncStatusText = `Sheets OK (${lastSyncedAt})`;
             updateHeaderBadges();
-            continue;
-          }
-
-          if (sentToAny && ep.type !== 'apps_script') {
-            continue;
+            return true;
           }
 
           const res = await fetch(ep.pushUrl, {
@@ -710,9 +726,7 @@
         } catch (_) {}
       }
 
-      if (sentToAny) return true;
-
-      syncStatusText = 'Reintentando nube...';
+      syncStatusText = 'Local OK (Reintentando...)';
       updateHeaderBadges();
       return false;
     }
@@ -744,7 +758,8 @@
             const remoteTs = Number(norm._updatedAt || 0);
 
             if (forceApply || remoteTs > currentTs || hasMeaningfulDiff(appState, norm)) {
-              return applyIncomingState(norm, remoteSyncSource);
+              const applied = applyIncomingState(norm, remoteSyncSource);
+              if (applied) return true;
             }
             lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
             syncStatusText = `${remoteSyncSource} (${lastSyncedAt})`;
@@ -764,7 +779,7 @@
       remoteSyncTimer = setInterval(() => {
         if (document.visibilityState === 'hidden') return;
         pullStateFromCloud(false);
-      }, 1500);
+      }, 1000);
     }
 
     window.addEventListener('focus', () => {
@@ -777,7 +792,7 @@
       }
     });
 
-    function saveState(st = appState) {
+    function saveState(st = appState, actionName = 'SYNC_STATE', extraPayload = {}) {
       if (!st || typeof st !== 'object') return;
       if (!isApplyingRemoteState) {
         st._updatedAt = Date.now();
@@ -789,7 +804,7 @@
             syncChannel.postMessage({ type: 'STATE_UPDATED', state: st });
           } catch (_) {}
         }
-        pushStateToCloud(st);
+        pushStateToCloud(st, actionName, extraPayload);
       }
     }
 
@@ -1980,10 +1995,14 @@
       if (!window.__aulaAutoRefreshTimer) {
         window.__aulaAutoRefreshTimer = setInterval(() => {
           if (currentUser && currentUser.perfil === 'TUTOR_AULA' && activeTab === 'aulaModule') {
-            pullStateFromCloud(false);
-            syncContinuousAlarmLoop();
+            pullStateFromCloud(false).then(changed => {
+              if (changed && currentUser && currentUser.perfil === 'TUTOR_AULA' && activeTab === 'aulaModule') {
+                renderCurrentTab();
+              }
+              syncContinuousAlarmLoop();
+            });
           }
-        }, 2000);
+        }, 1000);
       }
       syncContinuousAlarmLoop();
     }
