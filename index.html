@@ -88,7 +88,7 @@
     // =========================================================================
     // 1. SEDES, GRADOS DISPONIBLES Y PERFILES DE ACCESO POR SEDE
     // =========================================================================
-    const STORAGE_KEY = 'aulasalida_smart_flow_v13';
+    const STORAGE_KEY = 'aulasalida_smart_flow_v14';
     const SHEETS_WEBHOOK_URL = '';
 
     const ASISTENCIA = {
@@ -126,7 +126,31 @@
       { codigoSede: 'S20', nombreSede: 'S20 - SANTA ANITA', sheetTab: 'S20_SANTAANITA', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
       { codigoSede: 'S21', nombreSede: 'S21 - SORIA', sheetTab: 'S21_SORIA', niveles: ['Inicial', 'Primaria'], grados: ['Inicial 4 Años', 'Inicial 5 Años', '1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A'] },
       { codigoSede: 'S22', nombreSede: 'S22 - VENTANILLA', sheetTab: 'S22_VENTANILLA', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
-      { codigoSede: 'S23', nombreSede: 'S23 - VILLA SOL', sheetTab: 'S23_VILLASOL', niveles: ['Inicial', 'Primaria'], grados: ['Inicial 3 Años', 'Inicial 5 Años', '1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A'] }
+      { codigoSede: 'S23', nombreSede: 'S23 - VILLA SOL', sheetTab: 'S23_VILLASOL', niveles: ['Inicial', 'Primaria'], grados: ['Inicial 3 Años', 'Inicial 5 Años', '1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A'] },
+      { codigoSede: 'S24', nombreSede: 'S24 - BARRANCO', sheetTab: 'S24_BARRANCO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S25', nombreSede: 'S25 - BELLAVISTA', sheetTab: 'S25_BELLAVISTA', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S26', nombreSede: 'S26 - BELLIDO', sheetTab: 'S26_BELLIDO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S27', nombreSede: 'S27 - BELISARIO', sheetTab: 'S27_BELISARIO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S28', nombreSede: 'S28 - CANTA CALLAO', sheetTab: 'S28_CANTACALLAO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S29', nombreSede: 'S29 - CARABAYLLO', sheetTab: 'S29_CARABAYLLO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S30', nombreSede: 'S30 - CARRIZALES', sheetTab: 'S30_CARRIZALES', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S31', nombreSede: 'S31 - CHACLACAYO', sheetTab: 'S31_CHACLACAYO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S32', nombreSede: 'S32 - CHORRILLOS', sheetTab: 'S32_CHORRILLOS', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S33', nombreSede: 'S33 - CIPRESES ELIO', sheetTab: 'S33_CIPRESESELIO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S34', nombreSede: 'S34 - CUBA', sheetTab: 'S34_CUBA', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S35', nombreSede: 'S35 - EL ROSARIO', sheetTab: 'S35_ELROSARIO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S36', nombreSede: 'S36 - INGENIEROS', sheetTab: 'S36_INGENIEROS', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S37', nombreSede: 'S37 - LA VICTORIA', sheetTab: 'S37_LAVICTORIA', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S38', nombreSede: 'S38 - LINCE', sheetTab: 'S38_LINCE', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S39', nombreSede: 'S39 - MIGUEL IGLESIAS', sheetTab: 'S39_MIGUELIGLESIAS', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S40', nombreSede: 'S40 - MONTERRICO', sheetTab: 'S40_MONTERRICO', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S41', nombreSede: 'S41 - MONTESSORI', sheetTab: 'S41_MONTESSORI', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S42', nombreSede: 'S42 - NARANJAL', sheetTab: 'S42_NARANJAL', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S43', nombreSede: 'S43 - PUEBLO LIBRE', sheetTab: 'S43_PUEBLOLIBRE', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S44', nombreSede: 'S44 - SALAMANCA', sheetTab: 'S44_SALAMANCA', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S45', nombreSede: 'S45 - SAN MIGUEL', sheetTab: 'S45_SANMIGUEL', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S46', nombreSede: 'S46 - TARMA', sheetTab: 'S46_TARMA', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] },
+      { codigoSede: 'S47', nombreSede: 'S47 - VILLA EL SALVADOR', sheetTab: 'S47_VILLAELSALVADOR', niveles: ['Primaria'], grados: ['1° Grado A', '2° Grado A', '3° Grado A', '4° Grado A', '5° Grado A', '6° Grado A'] }
     ];
 
     const SEDE_MAP = Object.fromEntries(SEDES_Y_GRADOS.map(s => [s.codigoSede, s]));
