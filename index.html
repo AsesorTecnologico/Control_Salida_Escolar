@@ -600,6 +600,8 @@
     let selectedSedeForAdmin = SEDES_Y_GRADOS[0].codigoSede;
     let editingAulaId = null;
     let tutorPuertaApellidoQuery = '';
+    let tutorPuertaGradoFilter = '';
+    let tutorPuertaAulaFilter = '';
     let tutorPuertaSelectedIds = new Set();
 
     function getActiveSedeCode() {
@@ -664,6 +666,8 @@
         currentUser = null;
         editingAulaId = null;
         tutorPuertaApellidoQuery = '';
+        tutorPuertaGradoFilter = '';
+        tutorPuertaAulaFilter = '';
         tutorPuertaSelectedIds.clear();
         document.getElementById('appShell').classList.add('hidden');
         document.getElementById('loginScreen').classList.remove('hidden');
@@ -699,15 +703,12 @@
     function getTabsForRole(perfil) {
       if (perfil === 'TUTOR_PUERTA') {
         return [
-          { id: 'tutorFlow', label: 'Flujo Puerta y Procesos (Sede)' },
-          { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Sede)' },
-          { id: 'horarioGlobal', label: 'Horarios Nivel y Aulas (Sede)' }
+          { id: 'tutorFlow', label: 'Flujo Puerta y Procesos (Sede)' }
         ];
       }
       if (perfil === 'TUTOR_AULA') {
         return [
-          { id: 'aulaModule', label: 'Módulo Tutor de Aula (Sede)' },
-          { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Sede)' }
+          { id: 'aulaModule', label: 'Módulo Tutor de Aula (Sede)' }
         ];
       }
       return [
@@ -741,11 +742,16 @@
       ensureDayRollover(appState);
       updateHeaderBadges();
       const container = document.getElementById('mainContent');
+      if (currentUser && currentUser.perfil === 'TUTOR_PUERTA') {
+        activeTab = 'tutorFlow';
+        stopContinuousAlarmLoop();
+        return renderTutorGateFlow(container);
+      }
+      if (currentUser && currentUser.perfil === 'TUTOR_AULA') {
+        activeTab = 'aulaModule';
+        return renderTutorAulaModule(container);
+      }
       if (activeTab === 'cargaAlumnos') {
-        if (currentUser && currentUser.perfil === 'TUTOR_PUERTA') {
-          activeTab = 'tutorFlow';
-          return renderTutorGateFlow(container);
-        }
         stopContinuousAlarmLoop();
         return renderCargaAlumnosYAulasPorSede(container);
       }
@@ -757,11 +763,8 @@
         stopContinuousAlarmLoop();
         return renderHorarioGlobalAdmin(container);
       }
-      if (activeTab === 'tutorFlow') {
-        stopContinuousAlarmLoop();
-        return renderTutorGateFlow(container);
-      }
-      return renderTutorAulaModule(container);
+      stopContinuousAlarmLoop();
+      return renderCargaAlumnosYAulasPorSede(container);
     }
 
     function renderAdminSedeSelectorHtml() {
@@ -1332,7 +1335,24 @@
       const sedeCode = currentUser.codigoSede;
       const sedeCfg = getSedeConfig(sedeCode);
       const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
-      const alumnosFiltrados = alumnosSede.filter(a => coincideApellido(a.nombreAlumno, tutorPuertaApellidoQuery));
+      const aulasSede = getAulasPermanentesDeSede(sedeCode);
+
+      const gradosDisponibles = Array.from(new Set([
+        ...(sedeCfg.grados || []),
+        ...alumnosSede.map(a => a.grado).filter(Boolean)
+      ]));
+
+      const aulasDisponibles = Array.from(new Set([
+        ...aulasSede.map(au => au.nombreAula).filter(Boolean),
+        ...alumnosSede.map(a => a.aula).filter(Boolean)
+      ]));
+
+      const alumnosFiltrados = alumnosSede.filter(a => {
+        if (!coincideApellido(a.nombreAlumno, tutorPuertaApellidoQuery)) return false;
+        if (tutorPuertaGradoFilter && a.grado !== tutorPuertaGradoFilter) return false;
+        if (tutorPuertaAulaFilter && a.aula !== tutorPuertaAulaFilter) return false;
+        return true;
+      });
 
       // Mantener solo IDs válidos de la sede
       const validIds = new Set(alumnosSede.map(a => a.codigoAlumno));
@@ -1344,13 +1364,15 @@
       const todosFiltradosMarcados = elegiblesFiltrados.length > 0 &&
         elegiblesFiltrados.every(a => tutorPuertaSelectedIds.has(a.codigoAlumno));
 
+      const hayFiltrosActivos = !!(tutorPuertaApellidoQuery || tutorPuertaGradoFilter || tutorPuertaAulaFilter);
+
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
-                <h2 class="text-sm font-extrabold text-slate-900">Tabla de Procesos Individual — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
-                <p class="text-xs text-slate-500">Busque por apellido para ubicar rápido y vaya seleccionando alumnos; su selección se conserva al filtrar.</p>
+                <h2 class="text-sm font-extrabold text-slate-900">Flujo Puerta y Procesos — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
+                <p class="text-xs text-slate-500">Filtre por grado, aula o apellido para ubicar alumnos rápidamente y notificar a su aula.</p>
               </div>
               <div class="flex items-center gap-2 flex-wrap">
                 <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">
@@ -1369,23 +1391,36 @@
               </div>
             </div>
 
-            <!-- BUSCADOR POR APELLIDO -->
-            <div class="mb-4 flex flex-wrap items-center gap-2">
-              <div class="relative flex-1 min-w-[220px]">
-                <input id="inpBuscarApellidoPuerta" type="text"
-                  value="${tutorPuertaApellidoQuery}"
-                  placeholder="Buscar alumno por apellido (ej. Quispe, Mendoza, Huamán)..."
-                  class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+            <!-- FILTROS POR GRADO, AULA Y APELLIDO -->
+            <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 items-center">
+              <select id="selFiltroGradoPuerta"
+                class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <option value="">Todos los Grados</option>
+                ${gradosDisponibles.map(g => `<option value="${g}" ${tutorPuertaGradoFilter === g ? 'selected' : ''}>${g}</option>`).join('')}
+              </select>
+
+              <select id="selFiltroAulaPuerta"
+                class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600">
+                <option value="">Todas las Aulas</option>
+                ${aulasDisponibles.map(au => `<option value="${au}" ${tutorPuertaAulaFilter === au ? 'selected' : ''}>${au}</option>`).join('')}
+              </select>
+
+              <input id="inpBuscarApellidoPuerta" type="text"
+                value="${tutorPuertaApellidoQuery}"
+                placeholder="Buscar por apellido (ej. Quispe, Mendoza)..."
+                class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] font-semibold text-slate-500">
+                  ${alumnosFiltrados.length} de ${alumnosSede.length} alumno(s)
+                </span>
+                ${hayFiltrosActivos ? `
+                  <button id="btnLimpiarFiltrosPuerta" type="button"
+                    class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition whitespace-nowrap">
+                    Limpiar Filtros
+                  </button>
+                ` : ''}
               </div>
-              ${tutorPuertaApellidoQuery ? `
-                <button id="btnLimpiarApellidoPuerta" type="button"
-                  class="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition">
-                  Borrar Búsqueda
-                </button>
-              ` : ''}
-              <span class="text-[11px] font-semibold text-slate-500">
-                Mostrando ${alumnosFiltrados.length} de ${alumnosSede.length} alumno(s)
-              </span>
             </div>
 
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
@@ -1450,6 +1485,22 @@
         </div>
       `;
 
+      const filtroGradoSel = document.getElementById('selFiltroGradoPuerta');
+      if (filtroGradoSel) {
+        filtroGradoSel.addEventListener('change', e => {
+          tutorPuertaGradoFilter = e.target.value;
+          renderCurrentTab();
+        });
+      }
+
+      const filtroAulaSel = document.getElementById('selFiltroAulaPuerta');
+      if (filtroAulaSel) {
+        filtroAulaSel.addEventListener('change', e => {
+          tutorPuertaAulaFilter = e.target.value;
+          renderCurrentTab();
+        });
+      }
+
       const buscarInp = document.getElementById('inpBuscarApellidoPuerta');
       if (buscarInp) {
         buscarInp.addEventListener('input', e => {
@@ -1466,10 +1517,12 @@
         });
       }
 
-      const borrarBusqBtn = document.getElementById('btnLimpiarApellidoPuerta');
-      if (borrarBusqBtn) {
-        borrarBusqBtn.addEventListener('click', () => {
+      const limpiarFiltrosBtn = document.getElementById('btnLimpiarFiltrosPuerta');
+      if (limpiarFiltrosBtn) {
+        limpiarFiltrosBtn.addEventListener('click', () => {
           tutorPuertaApellidoQuery = '';
+          tutorPuertaGradoFilter = '';
+          tutorPuertaAulaFilter = '';
           renderCurrentTab();
         });
       }
