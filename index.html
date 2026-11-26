@@ -103,6 +103,7 @@
     let isApplyingRemoteState = false;
     let lastPushedSerialized = '';
     let activeSyncInFlight = false;
+    let remoteSyncSource = 'Ninguno';
 
     const ASISTENCIA = {
       PRESENTE: 'PRESENTE',
@@ -563,12 +564,22 @@
     function getSyncEndpoints() {
       const customUrl = localStorage.getItem('aulasalida_custom_sync_url');
       if (customUrl && customUrl.trim()) {
-        return [{ type: 'custom', url: customUrl.trim() }];
+        return [{ type: 'custom', pushUrl: customUrl.trim(), pullUrl: customUrl.trim(), method: 'POST' }];
       }
       const bucket = encodeURIComponent(getSyncBucketId());
       return [
-        { type: 'keyvalue', url: `https://api.keyvalue.xyz/new/${bucket}` },
-        { type: 'ntfy', url: `https://ntfy.sh/${bucket}_aulasalida_state` }
+        {
+          type: 'kvdb',
+          pushUrl: `https://kvdb.io/${bucket}/estado_global`,
+          pullUrl: `https://kvdb.io/${bucket}/estado_global`,
+          method: 'POST'
+        },
+        {
+          type: 'ntfy',
+          pushUrl: `https://ntfy.sh/${bucket}_aulasalida_state`,
+          pullUrl: `https://ntfy.sh/${bucket}_aulasalida_state/raw`,
+          method: 'PUT'
+        }
       ];
     }
 
@@ -604,7 +615,7 @@
       return JSON.stringify(ca) !== JSON.stringify(cb);
     }
 
-    function applyIncomingState(incomingRaw, sourceLabel = 'En línea') {
+    function applyIncomingState(incomingRaw, sourceLabel = 'Remoto') {
       const incoming = normalizeSyncedState(incomingRaw, null);
       if (!incoming) return false;
       const currentTs = Number((appState && appState._updatedAt) || 0);
@@ -621,9 +632,10 @@
       try {
         ensureDayRollover(incoming);
         appState = incoming;
+        lastPushedSerialized = JSON.stringify(appState);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
         lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-        syncStatusText = `En línea (${sourceLabel} ${lastSyncedAt})`;
+        syncStatusText = `Remoto OK (${sourceLabel} ${lastSyncedAt})`;
         updateHeaderBadges();
         if (currentUser) {
           renderCurrentTab();
@@ -642,52 +654,23 @@
 
       for (const ep of endpoints) {
         try {
-          if (ep.type === 'keyvalue') {
-            // keyvalue.xyz uses POST /new/<key> to create/set and POST /<key>/<val> or GET /<key>
-            const keyUrl = ep.url.replace('/new/', '/');
-            const res = await fetch(keyUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: payloadStr
-            });
-            if (res.ok) {
-              lastPushedSerialized = payloadStr;
-              lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-              syncStatusText = `En línea (${lastSyncedAt})`;
-              updateHeaderBadges();
-              return true;
-            }
-          } else if (ep.type === 'ntfy') {
-            const res = await fetch(ep.url, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: payloadStr
-            });
-            if (res.ok) {
-              lastPushedSerialized = payloadStr;
-              lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-              syncStatusText = `En línea (${lastSyncedAt})`;
-              updateHeaderBadges();
-              return true;
-            }
-          } else {
-            const res = await fetch(ep.url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: payloadStr
-            });
-            if (res.ok) {
-              lastPushedSerialized = payloadStr;
-              lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-              syncStatusText = `En línea (${lastSyncedAt})`;
-              updateHeaderBadges();
-              return true;
-            }
+          const res = await fetch(ep.pushUrl, {
+            method: ep.method || 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: payloadStr
+          });
+          if (res.ok) {
+            lastPushedSerialized = payloadStr;
+            remoteSyncSource = ep.type.toUpperCase();
+            lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            syncStatusText = `Nube ${remoteSyncSource} (${lastSyncedAt})`;
+            updateHeaderBadges();
+            return true;
           }
         } catch (_) {}
       }
 
-      syncStatusText = 'Reintentando conexión...';
+      syncStatusText = 'Reintentando nube...';
       updateHeaderBadges();
       return false;
     }
@@ -699,24 +682,27 @@
       try {
         for (const ep of endpoints) {
           try {
-            const targetUrl = ep.type === 'keyvalue' ? ep.url.replace('/new/', '/') : ep.url;
-            const sep = targetUrl.includes('?') ? '&' : '?';
-            const res = await fetch(`${targetUrl}${sep}_t=${Date.now()}`, { cache: 'no-store' });
+            const sep = ep.pullUrl.includes('?') ? '&' : '?';
+            const res = await fetch(`${ep.pullUrl}${sep}_t=${Date.now()}`, { cache: 'no-store' });
             if (!res.ok) continue;
             const text = await res.text();
             if (!text || !text.trim()) continue;
-            const remoteData = JSON.parse(text);
+            let remoteData = JSON.parse(text);
+            if (remoteData && typeof remoteData === 'object' && typeof remoteData.message === 'string') {
+              try { remoteData = JSON.parse(remoteData.message); } catch (_) {}
+            }
             const norm = normalizeSyncedState(remoteData, null);
             if (!norm) continue;
 
+            remoteSyncSource = ep.type.toUpperCase();
             const currentTs = Number((appState && appState._updatedAt) || 0);
             const remoteTs = Number(norm._updatedAt || 0);
 
             if (forceApply || remoteTs > currentTs || hasMeaningfulDiff(appState, norm)) {
-              return applyIncomingState(norm, 'PC/Remoto');
+              return applyIncomingState(norm, remoteSyncSource);
             }
             lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-            syncStatusText = `En línea (${lastSyncedAt})`;
+            syncStatusText = `Nube ${remoteSyncSource} (${lastSyncedAt})`;
             updateHeaderBadges();
             return false;
           } catch (_) {}
