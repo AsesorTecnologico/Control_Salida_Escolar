@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AulaSalida Smart — Flujo de Salida Escolar</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .fade-in { animation: fadeIn 0.2s ease-in-out; }
@@ -64,24 +65,13 @@
               <span class="font-extrabold text-sm tracking-tight">AulaSalida Smart</span>
               <span id="roleBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30"></span>
               <span id="fechaOperativaBadge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700"></span>
+              <span id="horarioOperativoBadge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-900/60 text-emerald-200 border border-emerald-700/60"></span>
             </div>
             <p id="userContextLabel" class="text-[11px] text-slate-300"></p>
           </div>
         </div>
 
-        <div class="flex items-center gap-2 flex-wrap">
-          <button id="migrarDiaBtn" type="button"
-            class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow">
-            Migrar Lista a Nuevo Día
-          </button>
-          <button id="recreateTablesBtn" type="button"
-            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow">
-            Crear Tablas Nuevamente
-          </button>
-          <button id="logoutBtn" type="button" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition">
-            Cerrar sesión
-          </button>
-        </div>
+        <div id="headerActionsContainer" class="flex items-center gap-2 flex-wrap"></div>
       </div>
 
       <nav id="topNav" class="bg-slate-800/90 border-t border-slate-700/70">
@@ -98,17 +88,8 @@
     // =========================================================================
     // 1. SEDES, GRADOS DISPONIBLES Y PERFILES DE ACCESO POR SEDE
     // =========================================================================
-    const STORAGE_KEY = 'aulasalida_smart_flow_v9';
+    const STORAGE_KEY = 'aulasalida_smart_flow_v10';
     const SHEETS_WEBHOOK_URL = '';
-
-    const TABLES = {
-      PERFILES_ACCESO: 'tbl_perfiles_acceso',
-      SEDES_NIVELES: 'tbl_sedes_niveles',
-      AULAS_SEDE: 'tbl_aulas_sede',
-      ALUMNOS: 'tbl_alumnos',
-      NOTIFICACIONES_AULA: 'tbl_notificaciones_aula',
-      SALIDAS_ESTUDIANTES: 'tbl_salidas_estudiantes'
-    };
 
     const ASISTENCIA = {
       PRESENTE: 'PRESENTE',
@@ -232,11 +213,12 @@
     }
 
     // =========================================================================
-    // 2. SONIDO DE ALERTA PARA NOTIFICACIÓN AL TUTOR DE AULA
+    // 2. ALARMA SONORA Y VISUAL PERSISTENTE HASTA INDICAR "A PUERTA"
     // =========================================================================
     let audioCtxInstance = null;
+    let alarmIntervalId = null;
 
-    function playAlertSound() {
+    function playSingleAlarmTone() {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
@@ -249,19 +231,18 @@
 
         const now = audioCtxInstance.currentTime;
         const notes = [
-          { freq: 880, start: 0, dur: 0.16 },
-          { freq: 1174.66, start: 0.18, dur: 0.16 },
-          { freq: 880, start: 0.36, dur: 0.22 }
+          { freq: 920, start: 0, dur: 0.16 },
+          { freq: 1220, start: 0.18, dur: 0.18 }
         ];
 
         notes.forEach(n => {
           const osc = audioCtxInstance.createOscillator();
           const gain = audioCtxInstance.createGain();
-          osc.type = 'triangle';
+          osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(n.freq, now + n.start);
 
           gain.gain.setValueAtTime(0.001, now + n.start);
-          gain.gain.exponentialRampToValueAtTime(0.25, now + n.start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.22, now + n.start + 0.02);
           gain.gain.exponentialRampToValueAtTime(0.001, now + n.start + n.dur);
 
           osc.connect(gain);
@@ -273,44 +254,103 @@
       } catch (_) {}
     }
 
-    // =========================================================================
-    // 3. REGISTROS DIARIOS, AULAS POR SEDE Y MIGRACIÓN DE ALUMNOS
-    // =========================================================================
-    function buildFreshTablesState() {
-      const today = getTodayISO();
-      const accessProfiles = buildAccessProfilesForSedes();
+    function syncContinuousAlarmLoop() {
+      const shouldRing = !!(
+        currentUser &&
+        currentUser.perfil === 'TUTOR_AULA' &&
+        appState.tbl_alumnos.some(
+          a => a.codigoSede === currentUser.codigoSede &&
+               a.alarmaActiva &&
+               a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA &&
+               a.asistencia === ASISTENCIA.PRESENTE
+        )
+      );
 
-      const tbl_aulas_sede = [
+      if (shouldRing) {
+        playSingleAlarmTone();
+        if (!alarmIntervalId) {
+          alarmIntervalId = setInterval(() => {
+            const stillActive = currentUser &&
+              currentUser.perfil === 'TUTOR_AULA' &&
+              appState.tbl_alumnos.some(
+                a => a.codigoSede === currentUser.codigoSede &&
+                     a.alarmaActiva &&
+                     a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA &&
+                     a.asistencia === ASISTENCIA.PRESENTE
+              );
+            if (stillActive) {
+              playSingleAlarmTone();
+            } else {
+              stopContinuousAlarmLoop();
+            }
+          }, 2600);
+        }
+      } else {
+        stopContinuousAlarmLoop();
+      }
+    }
+
+    function stopContinuousAlarmLoop() {
+      if (alarmIntervalId) {
+        clearInterval(alarmIntervalId);
+        alarmIntervalId = null;
+      }
+    }
+
+    // =========================================================================
+    // 3. ESTADO DIARIO, AULAS PERMANENTES, HORARIO GLOBAL Y MIGRACIÓN
+    // =========================================================================
+    function buildDefaultHorarioGlobal() {
+      return {
+        horaInicioSalida: '13:00',
+        horaFinSalida: '16:30',
+        diasActivos: 'Lunes a Viernes',
+        actualizadoEn: getTodayISO()
+      };
+    }
+
+    function buildDefaultAulasPermanentes() {
+      return [
         { idAula: 'AUL-S01-1', codigoSede: 'S01', nombreAula: 'Aula 101', grado: '3° Grado A' },
         { idAula: 'AUL-S01-2', codigoSede: 'S01', nombreAula: 'Aula 104', grado: '4° Grado B' },
         { idAula: 'AUL-S01-3', codigoSede: 'S01', nombreAula: 'Aula I-02', grado: 'Inicial 5 Años' },
         { idAula: 'AUL-S02-1', codigoSede: 'S02', nombreAula: 'Aula 202', grado: '2° Grado A' },
         { idAula: 'AUL-S03-1', codigoSede: 'S03', nombreAula: 'Aula 305', grado: '5° Grado A' }
       ];
+    }
+
+    function buildFreshTablesState(preserveAulasAndHorario = null) {
+      const today = getTodayISO();
+      const accessProfiles = buildAccessProfilesForSedes();
+      const tbl_aulas_permanentes = preserveAulasAndHorario && Array.isArray(preserveAulasAndHorario.aulas)
+        ? preserveAulasAndHorario.aulas
+        : buildDefaultAulasPermanentes();
+      const horarioGlobal = preserveAulasAndHorario && preserveAulasAndHorario.horario
+        ? preserveAulasAndHorario.horario
+        : buildDefaultHorarioGlobal();
 
       const tbl_alumnos = [
-        { codigoAlumno: 'ALU-101', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Mateo Quispe Ramos', grado: '3° Grado A', aula: 'Aula 101', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
-        { codigoAlumno: 'ALU-102', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Sofía Mendoza Díaz', grado: '3° Grado A', aula: 'Aula 101', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
-        { codigoAlumno: 'ALU-103', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Liam Huamán Castro', grado: '4° Grado B', aula: 'Aula 104', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
-        { codigoAlumno: 'ALU-104', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Valeria Salazar Ríos', grado: 'Inicial 5 Años', aula: 'Aula I-02', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
-        { codigoAlumno: 'ALU-201', codigoSede: 'S02', nombreSede: 'S02 - CAMPOY', nombreAlumno: 'Gabriel Herrera Luna', grado: '2° Grado A', aula: 'Aula 202', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
-        { codigoAlumno: 'ALU-301', codigoSede: 'S03', nombreSede: 'S03 - EL AGUSTINO', nombreAlumno: 'Camila Paredes Soto', grado: '5° Grado A', aula: 'Aula 305', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', fechaDia: today }
+        { codigoAlumno: 'ALU-101', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Mateo Quispe Ramos', grado: '3° Grado A', aula: 'Aula 101', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alarmaActiva: false, fechaDia: today },
+        { codigoAlumno: 'ALU-102', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Sofía Mendoza Díaz', grado: '3° Grado A', aula: 'Aula 101', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alarmaActiva: false, fechaDia: today },
+        { codigoAlumno: 'ALU-103', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Liam Huamán Castro', grado: '4° Grado B', aula: 'Aula 104', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alarmaActiva: false, fechaDia: today },
+        { codigoAlumno: 'ALU-104', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Valeria Salazar Ríos', grado: 'Inicial 5 Años', aula: 'Aula I-02', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alarmaActiva: false, fechaDia: today },
+        { codigoAlumno: 'ALU-201', codigoSede: 'S02', nombreSede: 'S02 - CAMPOY', nombreAlumno: 'Gabriel Herrera Luna', grado: '2° Grado A', aula: 'Aula 202', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alarmaActiva: false, fechaDia: today },
+        { codigoAlumno: 'ALU-301', codigoSede: 'S03', nombreSede: 'S03 - EL AGUSTINO', nombreAlumno: 'Camila Paredes Soto', grado: '5° Grado A', aula: 'Aula 305', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alarmaActiva: false, fechaDia: today }
       ];
 
       return {
         fechaOperativa: today,
+        horarioGlobal,
         accessProfiles,
-        tbl_aulas_sede,
+        tbl_aulas_permanentes,
         tbl_alumnos,
         tbl_notificaciones_aula: [],
         tbl_salidas_estudiantes: []
       };
     }
 
-    // Siempre al día siguiente:
-    // - Todos los alumnos se activan con estado PRESENTE
-    // - Se conserva la lista de alumnos (nombreAlumno, grado, aula)
-    // - Se reinician los estados de salida y registros diarios
+    // Conserva las aulas permanentes, el horario global y la lista de alumnos;
+    // cada día todos los alumnos se activan como PRESENTE y se reinician los estados diarios.
     function migrarListaAlumnosParaSiguienteDia(stateObj, nuevaFecha) {
       const targetDate = nuevaFecha || getNextDayISO(stateObj.fechaOperativa);
       stateObj.tbl_alumnos = stateObj.tbl_alumnos.map(a => ({
@@ -325,7 +365,7 @@
         horaNotifAula: '—',
         horaConfirmAula: '—',
         horaFinProceso: '—',
-        alertaVisualAula: false,
+        alarmaActiva: false,
         fechaDia: targetDate
       }));
       stateObj.tbl_notificaciones_aula = [];
@@ -353,8 +393,11 @@
         if (!Array.isArray(parsed.tbl_alumnos) || !Array.isArray(parsed.accessProfiles)) {
           return buildFreshTablesState();
         }
-        if (!Array.isArray(parsed.tbl_aulas_sede)) {
-          parsed.tbl_aulas_sede = buildFreshTablesState().tbl_aulas_sede;
+        if (!Array.isArray(parsed.tbl_aulas_permanentes)) {
+          parsed.tbl_aulas_permanentes = buildDefaultAulasPermanentes();
+        }
+        if (!parsed.horarioGlobal) {
+          parsed.horarioGlobal = buildDefaultHorarioGlobal();
         }
         ensureDayRollover(parsed);
         return parsed;
@@ -383,24 +426,34 @@
       const siguienteFecha = getNextDayISO(appState.fechaOperativa);
       migrarListaAlumnosParaSiguienteDia(appState, siguienteFecha);
       saveState(appState);
-      updateHeaderDateBadge();
+      updateHeaderBadges();
       syncTableEvent('MIGRAR_ALUMNOS_DIA', { nuevaFecha: siguienteFecha });
       if (currentUser) renderCurrentTab();
       showToast(`Lista migrada al día ${siguienteFecha}: todos los alumnos en estado PRESENTE.`);
     }
 
-    function recreateAllTablesNow() {
-      appState = buildFreshTablesState();
+    function actualizarTablasOperativasAdmin() {
+      if (!currentUser || currentUser.perfil !== 'ADMINISTRADOR') return;
+      const fresh = buildFreshTablesState({
+        aulas: appState.tbl_aulas_permanentes,
+        horario: appState.horarioGlobal
+      });
+      appState = fresh;
       saveState(appState);
-      updateHeaderDateBadge();
-      syncTableEvent('RECREATE_TABLES', { fechaOperativa: appState.fechaOperativa });
-      if (currentUser) renderCurrentTab();
-      showToast('Tablas creadas nuevamente para el registro diario.');
+      updateHeaderBadges();
+      syncTableEvent('ACTUALIZAR_TABLAS_DIARIAS', { fechaOperativa: appState.fechaOperativa });
+      renderCurrentTab();
+      showToast('Tablas diarias actualizadas conservando aulas permanentes y horario global.');
     }
 
-    function updateHeaderDateBadge() {
-      const el = document.getElementById('fechaOperativaBadge');
-      if (el) el.textContent = `Día: ${appState.fechaOperativa}`;
+    function updateHeaderBadges() {
+      const fEl = document.getElementById('fechaOperativaBadge');
+      const hEl = document.getElementById('horarioOperativoBadge');
+      if (fEl) fEl.textContent = `Día: ${appState.fechaOperativa}`;
+      if (hEl) {
+        const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
+        hEl.textContent = `Horario: ${hg.horaInicioSalida} - ${hg.horaFinSalida}`;
+      }
     }
 
     let appState = loadState();
@@ -414,16 +467,8 @@
       return currentUser.perfil === 'ADMINISTRADOR' ? selectedSedeForAdmin : currentUser.codigoSede;
     }
 
-    function getAulasDeSede(sedeCode) {
-      const fromTable = appState.tbl_aulas_sede.filter(a => a.codigoSede === sedeCode);
-      if (fromTable.length) return fromTable;
-      const fromAlumnos = Array.from(new Set(appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode).map(a => a.aula))).filter(Boolean);
-      return fromAlumnos.map((nombreAula, idx) => ({
-        idAula: `AUL-${sedeCode}-${idx + 1}`,
-        codigoSede: sedeCode,
-        nombreAula,
-        grado: ''
-      }));
+    function getAulasPermanentesDeSede(sedeCode) {
+      return appState.tbl_aulas_permanentes.filter(a => a.codigoSede === sedeCode);
     }
 
     // =========================================================================
@@ -452,22 +497,44 @@
       enterApp(acc);
     });
 
-    document.getElementById('migrarDiaBtn').addEventListener('click', migrarAlumnosSiguienteDiaManual);
-    document.getElementById('recreateTablesBtn').addEventListener('click', recreateAllTablesNow);
+    function renderHeaderActionsForRole() {
+      const box = document.getElementById('headerActionsContainer');
+      const isAdmin = currentUser && currentUser.perfil === 'ADMINISTRADOR';
+      box.innerHTML = `
+        <button id="migrarDiaBtn" type="button"
+          class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow">
+          Migrar Lista a Nuevo Día
+        </button>
+        ${isAdmin ? `
+          <button id="actualizarTablasBtn" type="button"
+            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow">
+            Actualizar Tablas
+          </button>
+        ` : ''}
+        <button id="logoutBtn" type="button" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition">
+          Cerrar sesión
+        </button>
+      `;
 
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-      currentUser = null;
-      editingAulaId = null;
-      document.getElementById('appShell').classList.add('hidden');
-      document.getElementById('loginScreen').classList.remove('hidden');
-      document.getElementById('loginPass').value = '';
-    });
+      document.getElementById('migrarDiaBtn').addEventListener('click', migrarAlumnosSiguienteDiaManual);
+      const updBtn = document.getElementById('actualizarTablasBtn');
+      if (updBtn) updBtn.addEventListener('click', actualizarTablasOperativasAdmin);
+      document.getElementById('logoutBtn').addEventListener('click', () => {
+        stopContinuousAlarmLoop();
+        currentUser = null;
+        editingAulaId = null;
+        document.getElementById('appShell').classList.add('hidden');
+        document.getElementById('loginScreen').classList.remove('hidden');
+        document.getElementById('loginPass').value = '';
+      });
+    }
 
     function enterApp(acc) {
       currentUser = acc;
       editingAulaId = null;
       ensureDayRollover(appState);
-      updateHeaderDateBadge();
+      updateHeaderBadges();
+      renderHeaderActionsForRole();
 
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('appShell').classList.remove('hidden');
@@ -502,7 +569,8 @@
       }
       return [
         { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Por Sede)' },
-        { id: 'processBySede', label: 'Tabla de Procesos (Por Sede)' }
+        { id: 'processBySede', label: 'Tabla de Procesos (Por Sede)' },
+        { id: 'horarioGlobal', label: 'Horario Global (Todas las Sedes)' }
       ];
     }
 
@@ -528,11 +596,24 @@
 
     function renderCurrentTab() {
       ensureDayRollover(appState);
-      updateHeaderDateBadge();
+      updateHeaderBadges();
       const container = document.getElementById('mainContent');
-      if (activeTab === 'cargaAlumnos') return renderCargaAlumnosYAulasPorSede(container);
-      if (activeTab === 'processBySede') return renderTablaProcesosPorSede(container);
-      if (activeTab === 'tutorFlow') return renderTutorGateFlow(container);
+      if (activeTab === 'cargaAlumnos') {
+        stopContinuousAlarmLoop();
+        return renderCargaAlumnosYAulasPorSede(container);
+      }
+      if (activeTab === 'processBySede') {
+        stopContinuousAlarmLoop();
+        return renderTablaProcesosPorSede(container);
+      }
+      if (activeTab === 'horarioGlobal') {
+        stopContinuousAlarmLoop();
+        return renderHorarioGlobalAdmin(container);
+      }
+      if (activeTab === 'tutorFlow') {
+        stopContinuousAlarmLoop();
+        return renderTutorGateFlow(container);
+      }
       return renderTutorAulaModule(container);
     }
 
@@ -562,8 +643,7 @@
     }
 
     // =========================================================================
-    // 5. AULAS POR SEDE (CREAR, EDITAR, ACTUALIZAR, ELIMINAR) +
-    //    CARGA DE ALUMNOS POR SEDE (AGREGAR, MIGRAR, ELIMINAR)
+    // 5. AULAS PERMANENTES POR SEDE + CARGA DE ALUMNOS (MANUAL Y DESDE EXCEL)
     // =========================================================================
     function eliminarAlumnoSede(codigoAlumno) {
       const sedeCode = getActiveSedeCode();
@@ -577,23 +657,93 @@
       showToast(`Alumno "${eliminado.nombreAlumno}" eliminado de la lista.`);
     }
 
-    function eliminarAulaSede(idAula) {
+    function eliminarAulaPermanenteSede(idAula) {
       const sedeCode = getActiveSedeCode();
-      const idx = appState.tbl_aulas_sede.findIndex(a => a.idAula === idAula && a.codigoSede === sedeCode);
+      const idx = appState.tbl_aulas_permanentes.findIndex(a => a.idAula === idAula && a.codigoSede === sedeCode);
       if (idx === -1) return;
-      const aulaEliminada = appState.tbl_aulas_sede[idx];
-      appState.tbl_aulas_sede.splice(idx, 1);
+      const aulaEliminada = appState.tbl_aulas_permanentes[idx];
+      appState.tbl_aulas_permanentes.splice(idx, 1);
       if (editingAulaId === idAula) editingAulaId = null;
       saveState();
-      syncTableEvent('DELETE_AULA_SEDE', { idAula, codigoSede: sedeCode });
+      syncTableEvent('DELETE_AULA_PERMANENTE', { idAula, codigoSede: sedeCode });
       renderCurrentTab();
-      showToast(`Aula "${aulaEliminada.nombreAula}" eliminada en ${sedeCode}.`);
+      showToast(`Aula permanente "${aulaEliminada.nombreAula}" eliminada en ${sedeCode}.`);
+    }
+
+    function importarAlumnosDesdeExcel(file, sedeCode, sedeNombre, aulasSede) {
+      if (!file || typeof XLSX === 'undefined') {
+        showToast('No se pudo leer el archivo Excel.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = evt => {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
+          const firstSheet = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+
+          if (!rows.length) {
+            showToast('El archivo Excel no contiene filas de alumnos.');
+            return;
+          }
+
+          let agregados = 0;
+          rows.forEach((row, idx) => {
+            const normalized = Object.fromEntries(
+              Object.entries(row).map(([k, v]) => [String(k).trim().toLowerCase(), String(v).trim()])
+            );
+            const nombreAlumno = normalized['nombre alumno'] || normalized['nombre'] || normalized['alumno'] || '';
+            const grado = normalized['grado'] || normalized['grado/seccion'] || normalized['sección'] || normalized['seccion'] || '';
+            const aulaRaw = normalized['aula'] || '';
+
+            if (!nombreAlumno) return;
+
+            const gradoFinal = grado || (getSedeConfig(sedeCode).grados[0] || '1° Grado A');
+            const aulaFinal = aulaRaw || (aulasSede[0] ? aulasSede[0].nombreAula : 'Aula General');
+
+            if (aulaRaw && !aulasSede.some(au => au.nombreAula.toLowerCase() === aulaRaw.toLowerCase())) {
+              appState.tbl_aulas_permanentes.push({
+                idAula: `AUL-${sedeCode}-${Date.now()}-${idx}`,
+                codigoSede: sedeCode,
+                nombreAula: aulaRaw,
+                grado: gradoFinal
+              });
+            }
+
+            appState.tbl_alumnos.push({
+              codigoAlumno: `ALU-${sedeCode}-XLS-${Date.now().toString().slice(-4)}-${idx + 1}`,
+              codigoSede: sedeCode,
+              nombreSede: sedeNombre,
+              nombreAlumno,
+              grado: gradoFinal,
+              aula: aulaFinal,
+              asistencia: ASISTENCIA.PRESENTE,
+              etapaFlujo: FLOW_STEP.PENDIENTE,
+              horaNotifAula: '—',
+              horaConfirmAula: '—',
+              horaFinProceso: '—',
+              alarmaActiva: false,
+              fechaDia: appState.fechaOperativa
+            });
+            agregados++;
+          });
+
+          saveState();
+          syncTableEvent('IMPORT_EXCEL_ALUMNOS', { codigoSede: sedeCode, agregados, fechaDia: appState.fechaOperativa });
+          renderCurrentTab();
+          showToast(`${agregados} alumno(s) cargados desde Excel en ${sedeNombre}.`);
+        } catch (_) {
+          showToast('Error al procesar el archivo Excel.');
+        }
+      };
+      reader.readAsArrayBuffer(file);
     }
 
     function renderCargaAlumnosYAulasPorSede(container) {
       const sedeCode = getActiveSedeCode();
       const sedeCfg = getSedeConfig(sedeCode);
-      const aulasSede = getAulasDeSede(sedeCode);
+      const aulasSede = getAulasPermanentesDeSede(sedeCode);
       const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
       const aulaEnEdicion = editingAulaId ? aulasSede.find(x => x.idAula === editingAulaId) : null;
 
@@ -601,14 +751,14 @@
         <div class="space-y-6 fade-in">
           ${renderAdminSedeSelectorHtml()}
 
-          <!-- GESTIÓN DE AULAS EN CADA SEDE -->
+          <!-- AULAS PERMANENTES DE LA SEDE (SE CREAN UNA VEZ Y PERDURAN TODOS LOS DÍAS) -->
           <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
               <div>
-                <h2 class="text-base font-extrabold text-slate-900">Aulas de la Sede — ${sedeCfg.nombreSede}</h2>
-                <p class="text-xs text-slate-500">Cree, edite, actualice o elimine aulas de forma individual para esta sede.</p>
+                <h2 class="text-base font-extrabold text-slate-900">Aulas Permanentes — ${sedeCfg.nombreSede}</h2>
+                <p class="text-xs text-slate-500">Se crean una sola vez y perduran en todos los días (puede editarlas, actualizarlas o eliminarlas).</p>
               </div>
-              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">${aulasSede.length} aula(s)</span>
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">${aulasSede.length} aula(s) permanente(s)</span>
             </div>
 
             <form id="aulaSedeForm" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -627,7 +777,7 @@
               </div>
               <div class="flex items-end gap-2">
                 <button type="submit" class="flex-1 py-2 px-3 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow">
-                  ${aulaEnEdicion ? 'Actualizar Aula' : 'Crear Aula'}
+                  ${aulaEnEdicion ? 'Actualizar Aula' : 'Crear Aula Permanente'}
                 </button>
                 ${aulaEnEdicion ? `
                   <button id="cancelEditAulaBtn" type="button" class="py-2 px-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold">
@@ -653,55 +803,64 @@
                     Eliminar
                   </button>
                 </div>
-              `).join('') : `<p class="text-xs text-slate-400">No hay aulas creadas en esta sede.</p>`}
+              `).join('') : `<p class="text-xs text-slate-400">No hay aulas permanentes creadas en esta sede.</p>`}
             </div>
           </div>
 
-          <!-- CARGA Y LISTA DE ALUMNOS DE LA SEDE -->
+          <!-- CARGA DE ALUMNOS (INDIVIDUAL O DESDE EXCEL) + LISTA MIGRABLE -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm h-fit">
-              <div class="flex items-center justify-between gap-2 mb-1">
-                <h2 class="text-base font-extrabold text-slate-900">Carga de Alumnos</h2>
-                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">${sedeCfg.codigoSede}</span>
+            <div class="space-y-4 h-fit">
+              <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div class="flex items-center justify-between gap-2 mb-1">
+                  <h2 class="text-base font-extrabold text-slate-900">Carga de Alumnos</h2>
+                  <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">${sedeCfg.codigoSede}</span>
+                </div>
+                <p class="text-xs text-slate-500 mb-4">Día <strong>${appState.fechaOperativa}</strong> &bull; Se cargan como <strong>PRESENTE</strong>.</p>
+
+                <form id="cargaAlumnoSedeForm" class="space-y-3.5">
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Nombre Alumno</label>
+                    <input id="inpNombreAlumno" type="text" required placeholder="Ej. Lucía Mendoza Cruz"
+                      class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Grado</label>
+                    <select id="inpGradoAlumno" required
+                      class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600">
+                      ${sedeCfg.grados.map(g => `<option value="${g}">${g}</option>`).join('')}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">Aula</label>
+                    <select id="inpAulaAlumno" required
+                      class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600">
+                      ${aulasSede.length
+                        ? aulasSede.map(au => `<option value="${au.nombreAula}">${au.nombreAula}</option>`).join('')
+                        : `<option value="Aula General">Aula General</option>`}
+                    </select>
+                  </div>
+
+                  <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
+                    Agregar Alumno a ${sedeCfg.codigoSede}
+                  </button>
+                </form>
               </div>
-              <p class="text-xs text-slate-500 mb-4">Día <strong>${appState.fechaOperativa}</strong> &bull; Se cargan como <strong>PRESENTE</strong>.</p>
 
-              <form id="cargaAlumnoSedeForm" class="space-y-3.5">
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1">Nombre Alumno</label>
-                  <input id="inpNombreAlumno" type="text" required placeholder="Ej. Lucía Mendoza Cruz"
-                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600" />
-                </div>
-
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1">Grado</label>
-                  <select id="inpGradoAlumno" required
-                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600">
-                    ${sedeCfg.grados.map(g => `<option value="${g}">${g}</option>`).join('')}
-                  </select>
-                </div>
-
-                <div>
-                  <label class="block text-xs font-bold text-slate-700 mb-1">Aula</label>
-                  <select id="inpAulaAlumno" required
-                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600">
-                    ${aulasSede.length
-                      ? aulasSede.map(au => `<option value="${au.nombreAula}">${au.nombreAula}</option>`).join('')
-                      : `<option value="Aula General">Aula General</option>`}
-                  </select>
-                </div>
-
-                <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
-                  Agregar Alumno a ${sedeCfg.codigoSede}
-                </button>
-              </form>
+              <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <h3 class="text-sm font-extrabold text-slate-900 mb-1">Carga Masiva desde Excel</h3>
+                <p class="text-xs text-slate-500 mb-3">Columnas esperadas: <strong>Nombre Alumno</strong>, <strong>Grado</strong> y <strong>Aula</strong> (la lista cargada puede migrar de un día a otro).</p>
+                <input id="excelAlumnosInput" type="file" accept=".xlsx,.xls,.csv"
+                  class="block w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-50 file:text-emerald-800 hover:file:bg-emerald-100 cursor-pointer" />
+              </div>
             </div>
 
             <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
               <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div>
                   <h3 class="text-base font-extrabold text-slate-900">Lista de Alumnos — ${sedeCfg.nombreSede}</h3>
-                  <p class="text-xs text-slate-500">Esta lista puede migrar al día siguiente o eliminarse si es necesario.</p>
+                  <p class="text-xs text-slate-500">La misma lista migra al día siguiente con estado <strong>PRESENTE</strong> o puede eliminarse si es necesario.</p>
                 </div>
                 <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">${alumnosSede.length} alumno(s)</span>
               </div>
@@ -753,7 +912,7 @@
         if (!nombreAula) return;
 
         if (editingAulaId) {
-          const aulaObj = appState.tbl_aulas_sede.find(x => x.idAula === editingAulaId && x.codigoSede === sedeCode);
+          const aulaObj = appState.tbl_aulas_permanentes.find(x => x.idAula === editingAulaId && x.codigoSede === sedeCode);
           if (aulaObj) {
             const anteriorNombre = aulaObj.nombreAula;
             aulaObj.nombreAula = nombreAula;
@@ -763,8 +922,8 @@
                 al.aula = nombreAula;
               }
             });
-            syncTableEvent('UPDATE_AULA_SEDE', { aula: aulaObj });
-            showToast(`Aula actualizada a "${nombreAula}".`);
+            syncTableEvent('UPDATE_AULA_PERMANENTE', { aula: aulaObj });
+            showToast(`Aula permanente actualizada a "${nombreAula}".`);
           }
           editingAulaId = null;
         } else {
@@ -774,9 +933,9 @@
             nombreAula,
             grado
           };
-          appState.tbl_aulas_sede.push(nuevaAula);
-          syncTableEvent('CREATE_AULA_SEDE', { aula: nuevaAula });
-          showToast(`Aula "${nombreAula}" creada en ${sedeCfg.nombreSede}.`);
+          appState.tbl_aulas_permanentes.push(nuevaAula);
+          syncTableEvent('CREATE_AULA_PERMANENTE', { aula: nuevaAula });
+          showToast(`Aula permanente "${nombreAula}" creada en ${sedeCfg.nombreSede}.`);
         }
 
         saveState();
@@ -799,7 +958,7 @@
       });
 
       container.querySelectorAll('[data-del-aula]').forEach(btn => {
-        btn.addEventListener('click', () => eliminarAulaSede(btn.dataset.delAula));
+        btn.addEventListener('click', () => eliminarAulaPermanenteSede(btn.dataset.delAula));
       });
 
       container.querySelectorAll('[data-del-alumno]').forEach(btn => {
@@ -826,7 +985,7 @@
           horaNotifAula: '—',
           horaConfirmAula: '—',
           horaFinProceso: '—',
-          alertaVisualAula: false,
+          alarmaActiva: false,
           fechaDia: appState.fechaOperativa
         };
 
@@ -836,11 +995,21 @@
         renderCurrentTab();
         showToast(`Alumno "${nombreAlumno}" agregado como PRESENTE en ${aula}.`);
       });
+
+      const excelInput = document.getElementById('excelAlumnosInput');
+      if (excelInput) {
+        excelInput.addEventListener('change', e => {
+          const file = e.target.files && e.target.files[0];
+          if (file) {
+            importarAlumnosDesdeExcel(file, sedeCode, sedeCfg.nombreSede, aulasSede);
+          }
+        });
+      }
     }
 
     // =========================================================================
-    // 6. FLUJO: TUTOR PUERTA NOTIFICA (CON SONIDO Y ALERTA VISUAL EN AULA) ->
-    //    TUTOR AULA CONFIRMA O MARCA FALTA -> TERMINA PROCESO
+    // 6. FLUJO: TUTOR PUERTA NOTIFICA -> ALARMA ACTIVA HASTA "VA A LA PUERTA" ->
+    //    TERMINA PROCESO
     // =========================================================================
     function getAsistenciaBadge(asistencia) {
       if (asistencia === ASISTENCIA.FALTA) {
@@ -849,61 +1018,65 @@
       return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">PRESENTE</span>`;
     }
 
-    function getEtapaBadge(etapa) {
+    function getEtapaBadge(etapa, alarmaActiva) {
       if (etapa === FLOW_STEP.FINALIZADO) {
         return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">PROCESO TERMINADO</span>`;
       }
       if (etapa === FLOW_STEP.CONFIRMADO_AULA) {
-        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">CONFIRMADO POR AULA (A PUERTA)</span>`;
+        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">VA A LA PUERTA</span>`;
       }
       if (etapa === FLOW_STEP.NOTIFICADO_AULA) {
-        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">ALERTA: NOTIFICADO A AULA</span>`;
+        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${alarmaActiva ? 'bg-rose-100 text-rose-800' : 'bg-blue-100 text-blue-800'}">${alarmaActiva ? 'ALARMA ACTIVA (EN AULA)' : 'NOTIFICADO A AULA'}</span>`;
       }
       return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">PENDIENTE</span>`;
     }
 
-    // Tutor de puerta notifica al tutor de aula (activa alerta visual + sonido de alerta)
-    function tutorPuertaNotificarAula(codigoAlumno) {
-      const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
-      if (!st) return;
+    // Tutor de puerta notifica a uno o varios alumnos: activa alarma persistente hasta indicar "Va a la puerta"
+    function tutorPuertaNotificarAlumnos(codigosAlumnos) {
+      const ids = Array.isArray(codigosAlumnos) ? codigosAlumnos : [codigosAlumnos];
+      const hora = getNowHHMM();
+      let notificadosCount = 0;
 
-      if (st.asistencia === ASISTENCIA.FALTA) {
-        showToast(`El alumno ${st.nombreAlumno} figura con FALTA el día de hoy.`);
+      ids.forEach(codigoAlumno => {
+        const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
+        if (!st || st.asistencia === ASISTENCIA.FALTA || st.etapaFlujo === FLOW_STEP.FINALIZADO) return;
+
+        st.etapaFlujo = FLOW_STEP.NOTIFICADO_AULA;
+        st.horaNotifAula = hora;
+        st.alarmaActiva = true;
+        st.fechaDia = appState.fechaOperativa;
+        notificadosCount++;
+
+        appState.tbl_notificaciones_aula.unshift({
+          fecha: appState.fechaOperativa,
+          horaNotificacion: hora,
+          codigoSede: st.codigoSede,
+          nombreAlumno: st.nombreAlumno,
+          grado: st.grado,
+          aula: st.aula,
+          tutorPuerta: currentUser.nombre,
+          estado: 'ALARMA_ACTIVA'
+        });
+      });
+
+      if (!notificadosCount) {
+        showToast('No hay alumnos presentes elegibles para notificar.');
         return;
       }
 
-      const hora = getNowHHMM();
-      st.etapaFlujo = FLOW_STEP.NOTIFICADO_AULA;
-      st.horaNotifAula = hora;
-      st.alertaVisualAula = true;
-      st.fechaDia = appState.fechaOperativa;
-
-      appState.tbl_notificaciones_aula.unshift({
-        fecha: appState.fechaOperativa,
-        horaNotificacion: hora,
-        codigoSede: st.codigoSede,
-        nombreAlumno: st.nombreAlumno,
-        grado: st.grado,
-        aula: st.aula,
-        tutorPuerta: currentUser.nombre,
-        estado: 'NOTIFICADO_A_AULA'
-      });
-
       saveState();
-      playAlertSound();
-      syncTableEvent('NOTIFICAR_TUTOR_AULA', { codigoAlumno, horaNotifAula: hora, fecha: appState.fechaOperativa });
+      syncTableEvent('NOTIFICAR_ALUMNOS_AULA', { codigosAlumnos: ids, horaNotifAula: hora, fecha: appState.fechaOperativa });
       renderCurrentTab();
-      showToast(`Alerta sonora y visual enviada al Tutor de Aula: ${st.nombreAlumno} (${st.aula}).`);
+      showToast(`Alarma activada para ${notificadosCount} alumno(s) hasta indicar que van a la puerta.`);
     }
 
-    // Tutor de aula puede marcar falta si el alumno faltó el día de hoy
     function tutorAulaMarcarFalta(codigoAlumno) {
       const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
       if (!st) return;
 
       st.asistencia = st.asistencia === ASISTENCIA.FALTA ? ASISTENCIA.PRESENTE : ASISTENCIA.FALTA;
       if (st.asistencia === ASISTENCIA.FALTA) {
-        st.alertaVisualAula = false;
+        st.alarmaActiva = false;
         st.etapaFlujo = FLOW_STEP.PENDIENTE;
       }
 
@@ -913,23 +1086,31 @@
       showToast(`${st.nombreAlumno} marcado como ${st.asistencia}.`);
     }
 
-    // Tutor de aula confirma que el alumno se dirige a la puerta
-    function tutorAulaConfirmarAlumnoAPuerta(codigoAlumno) {
-      const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
-      if (!st) return;
-
+    // La alarma NO se desactiva hasta que se indique que el alumno o los alumnos van a la puerta
+    function tutorAulaIndicarVanAPuerta(codigosAlumnos) {
+      const ids = Array.isArray(codigosAlumnos) ? codigosAlumnos : [codigosAlumnos];
       const hora = getNowHHMM();
-      st.etapaFlujo = FLOW_STEP.CONFIRMADO_AULA;
-      st.horaConfirmAula = hora;
-      st.alertaVisualAula = false;
+      let confirmados = 0;
+
+      ids.forEach(codigoAlumno => {
+        const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
+        if (!st || st.asistencia !== ASISTENCIA.PRESENTE) return;
+        if (st.etapaFlujo !== FLOW_STEP.NOTIFICADO_AULA && !st.alarmaActiva) return;
+
+        st.etapaFlujo = FLOW_STEP.CONFIRMADO_AULA;
+        st.horaConfirmAula = hora;
+        st.alarmaActiva = false;
+        confirmados++;
+      });
+
+      if (!confirmados) return;
 
       saveState();
-      syncTableEvent('CONFIRMAR_ALUMNO_A_PUERTA', { codigoAlumno, horaConfirmAula: hora, fecha: appState.fechaOperativa });
+      syncTableEvent('INDICAR_ALUMNOS_A_PUERTA', { codigosAlumnos: ids, horaConfirmAula: hora, fecha: appState.fechaOperativa });
       renderCurrentTab();
-      showToast(`Tutor de aula confirmó que ${st.nombreAlumno} se dirige a la puerta.`);
+      showToast(`Alarma desactivada: se indicó que ${confirmados} alumno(s) van a la puerta.`);
     }
 
-    // Termina el proceso
     function terminarProcesoSalida(codigoAlumno) {
       const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
       if (!st) return;
@@ -937,7 +1118,7 @@
       const hora = getNowHHMM();
       st.etapaFlujo = FLOW_STEP.FINALIZADO;
       st.horaFinProceso = hora;
-      st.alertaVisualAula = false;
+      st.alarmaActiva = false;
 
       appState.tbl_salidas_estudiantes.unshift({
         fecha: appState.fechaOperativa,
@@ -965,20 +1146,29 @@
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <h2 class="text-sm font-extrabold text-slate-900 mb-1">Tabla de Procesos Individual — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
-            <p class="text-xs text-slate-500 mb-4">Al notificar a aula se emite un sonido de alerta y se activa la notificación visual para el Tutor de Aula.</p>
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div>
+                <h2 class="text-sm font-extrabold text-slate-900">Tabla de Procesos Individual — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
+                <p class="text-xs text-slate-500">Seleccione uno o varios alumnos para notificar al aula o notifique individualmente.</p>
+              </div>
+              <button id="notificarSeleccionadosBtn" type="button"
+                class="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow">
+                Notificar Seleccionados a Aula
+              </button>
+            </div>
 
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
+                    <th class="px-3 py-2.5 w-8"><input id="chkTodosPuerta" type="checkbox" /></th>
                     <th class="px-3 py-2.5">Nombre Alumno</th>
                     <th class="px-3 py-2.5">Grado</th>
                     <th class="px-3 py-2.5">Aula</th>
                     <th class="px-3 py-2.5">Asistencia</th>
                     <th class="px-3 py-2.5">Estado</th>
                     <th class="px-3 py-2.5">Notif. Aula</th>
-                    <th class="px-3 py-2.5">Conf. Aula</th>
+                    <th class="px-3 py-2.5">Va a Puerta</th>
                     <th class="px-3 py-2.5">Fin</th>
                     <th class="px-3 py-2.5 text-right">Acciones</th>
                   </tr>
@@ -986,11 +1176,12 @@
                 <tbody class="divide-y divide-slate-100">
                   ${alumnosSede.map(a => `
                     <tr>
+                      <td class="px-3 py-2.5"><input type="checkbox" name="chkAlumnoPuerta" value="${a.codigoAlumno}" ${a.asistencia === ASISTENCIA.FALTA ? 'disabled' : ''} /></td>
                       <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
                       <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
                       <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
                       <td class="px-3 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
-                      <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo)}</td>
+                      <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo, a.alarmaActiva)}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaNotifAula}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaConfirmAula}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaFinProceso}</td>
@@ -1015,8 +1206,29 @@
         </div>
       `;
 
+      const chkTodos = document.getElementById('chkTodosPuerta');
+      if (chkTodos) {
+        chkTodos.addEventListener('change', () => {
+          container.querySelectorAll('input[name="chkAlumnoPuerta"]:not(:disabled)').forEach(c => {
+            c.checked = chkTodos.checked;
+          });
+        });
+      }
+
+      const notifSelBtn = document.getElementById('notificarSeleccionadosBtn');
+      if (notifSelBtn) {
+        notifSelBtn.addEventListener('click', () => {
+          const seleccionados = Array.from(container.querySelectorAll('input[name="chkAlumnoPuerta"]:checked')).map(c => c.value);
+          if (!seleccionados.length) {
+            showToast('Seleccione al menos un alumno.');
+            return;
+          }
+          tutorPuertaNotificarAlumnos(seleccionados);
+        });
+      }
+
       container.querySelectorAll('[data-notificar-aula]').forEach(btn => {
-        btn.addEventListener('click', () => tutorPuertaNotificarAula(btn.dataset.notificarAula));
+        btn.addEventListener('click', () => tutorPuertaNotificarAlumnos(btn.dataset.notificarAula));
       });
       container.querySelectorAll('[data-terminar]').forEach(btn => {
         btn.addEventListener('click', () => terminarProcesoSalida(btn.dataset.terminar));
@@ -1027,32 +1239,30 @@
       const sedeCode = currentUser.codigoSede;
       const sedeCfg = getSedeConfig(sedeCode);
       const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
-      const alertasActivas = alumnosSede.filter(a => a.alertaVisualAula && a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA);
-
-      if (alertasActivas.length > 0) {
-        playAlertSound();
-      }
+      const alumnosConAlarma = alumnosSede.filter(
+        a => a.alarmaActiva && a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA && a.asistencia === ASISTENCIA.PRESENTE
+      );
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
-          ${alertasActivas.length ? `
+          ${alumnosConAlarma.length ? `
             <div class="p-4 rounded-2xl bg-rose-50 border-2 border-rose-500 text-rose-950 alert-pulse flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p class="text-xs font-extrabold uppercase tracking-wider text-rose-700">Alerta de Notificación desde Puerta</p>
+                <p class="text-xs font-extrabold uppercase tracking-wider text-rose-700">Alarma Activa — Permanece Encendida Hasta Indicar "Va a la Puerta"</p>
                 <p class="text-xs font-semibold mt-0.5">
-                  ${alertasActivas.map(x => `${x.nombreAlumno} (${x.grado} — ${x.aula})`).join(' • ')}
+                  ${alumnosConAlarma.map(x => `${x.nombreAlumno} (${x.grado} — ${x.aula})`).join(' • ')}
                 </p>
               </div>
-              <button id="replayAlertSoundBtn" type="button"
-                class="px-3 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold shadow">
-                Reproducir Sonido de Alerta
+              <button id="indicarTodosPuertaBtn" type="button"
+                class="px-3.5 py-2 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow">
+                Indicar que Todos Van a la Puerta (Desactivar Alarma)
               </button>
             </div>
           ` : ''}
 
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <h2 class="text-base font-extrabold text-slate-900 mb-1">Módulo Tutor de Aula — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
-            <p class="text-xs text-slate-500 mb-4">Todos inician como <strong>PRESENTE</strong> cada día. Puede indicar <strong>FALTA</strong>, confirmar que el alumno va a puerta o terminar el proceso.</p>
+            <p class="text-xs text-slate-500 mb-4">Al indicar que el alumno va a la puerta se desactiva su alarma. Todos inician como <strong>PRESENTE</strong> cada día.</p>
 
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
@@ -1064,18 +1274,18 @@
                     <th class="px-3 py-2.5">Asistencia</th>
                     <th class="px-3 py-2.5">Estado</th>
                     <th class="px-3 py-2.5">Hora Notif.</th>
-                    <th class="px-3 py-2.5">Hora Conf.</th>
+                    <th class="px-3 py-2.5">Va a Puerta</th>
                     <th class="px-3 py-2.5 text-right">Acciones de Aula</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                   ${alumnosSede.map(a => `
-                    <tr class="${a.alertaVisualAula ? 'bg-rose-50/70' : ''}">
+                    <tr class="${a.alarmaActiva ? 'bg-rose-50/80' : ''}">
                       <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
                       <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
                       <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
                       <td class="px-3 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
-                      <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo)}</td>
+                      <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo, a.alarmaActiva)}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaNotifAula}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaConfirmAula}</td>
                       <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
@@ -1083,10 +1293,10 @@
                           class="px-2.5 py-1 rounded-lg ${a.asistencia === ASISTENCIA.FALTA ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-800'} font-bold text-[11px]">
                           ${a.asistencia === ASISTENCIA.FALTA ? 'Marcar Presente' : 'Indicar Falta'}
                         </button>
-                        ${a.asistencia === ASISTENCIA.PRESENTE && a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA ? `
-                          <button type="button" data-confirmar-puerta="${a.codigoAlumno}"
+                        ${a.asistencia === ASISTENCIA.PRESENTE && (a.alarmaActiva || a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA) ? `
+                          <button type="button" data-ir-puerta="${a.codigoAlumno}"
                             class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px]">
-                            Confirmar Alumno a Puerta
+                            Va a la Puerta
                           </button>
                         ` : ''}
                         ${a.asistencia === ASISTENCIA.PRESENTE && a.etapaFlujo === FLOW_STEP.CONFIRMADO_AULA ? `
@@ -1108,20 +1318,24 @@
         </div>
       `;
 
-      const replayBtn = document.getElementById('replayAlertSoundBtn');
-      if (replayBtn) {
-        replayBtn.addEventListener('click', playAlertSound);
+      const todosBtn = document.getElementById('indicarTodosPuertaBtn');
+      if (todosBtn) {
+        todosBtn.addEventListener('click', () => {
+          tutorAulaIndicarVanAPuerta(alumnosConAlarma.map(x => x.codigoAlumno));
+        });
       }
 
       container.querySelectorAll('[data-falta-aula]').forEach(btn => {
         btn.addEventListener('click', () => tutorAulaMarcarFalta(btn.dataset.faltaAula));
       });
-      container.querySelectorAll('[data-confirmar-puerta]').forEach(btn => {
-        btn.addEventListener('click', () => tutorAulaConfirmarAlumnoAPuerta(btn.dataset.confirmarPuerta));
+      container.querySelectorAll('[data-ir-puerta]').forEach(btn => {
+        btn.addEventListener('click', () => tutorAulaIndicarVanAPuerta(btn.dataset.irPuerta));
       });
       container.querySelectorAll('[data-terminar-aula]').forEach(btn => {
         btn.addEventListener('click', () => terminarProcesoSalida(btn.dataset.terminarAula));
       });
+
+      syncContinuousAlarmLoop();
     }
 
     function renderTablaProcesosPorSede(container) {
@@ -1152,7 +1366,7 @@
                     <th class="px-3 py-2.5">Asistencia</th>
                     <th class="px-3 py-2.5">Estado del Proceso</th>
                     <th class="px-3 py-2.5">Hora Notif. Aula</th>
-                    <th class="px-3 py-2.5">Hora Conf. Aula</th>
+                    <th class="px-3 py-2.5">Va a Puerta</th>
                     <th class="px-3 py-2.5">Hora Fin</th>
                   </tr>
                 </thead>
@@ -1163,7 +1377,7 @@
                       <td class="px-3 py-2.5 text-slate-700">${p.grado}</td>
                       <td class="px-3 py-2.5 font-semibold text-blue-800">${p.aula}</td>
                       <td class="px-3 py-2.5">${getAsistenciaBadge(p.asistencia)}</td>
-                      <td class="px-3 py-2.5">${getEtapaBadge(p.etapaFlujo)}</td>
+                      <td class="px-3 py-2.5">${getEtapaBadge(p.etapaFlujo, p.alarmaActiva)}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${p.horaNotifAula}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${p.horaConfirmAula}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${p.horaFinProceso}</td>
@@ -1181,6 +1395,94 @@
       `;
 
       bindAdminSedeSelector(container);
+    }
+
+    // =========================================================================
+    // 7. HORARIO GLOBAL CONFIGURADO DESDE ADMINISTRADOR PARA TODAS LAS SEDES
+    // =========================================================================
+    function renderHorarioGlobalAdmin(container) {
+      const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
+
+      container.innerHTML = `
+        <div class="space-y-6 fade-in">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm h-fit">
+              <h2 class="text-base font-extrabold text-slate-900 mb-1">Horario Global de Salida</h2>
+              <p class="text-xs text-slate-500 mb-4">Configuración centralizada desde Administrador aplicada a todas las sedes disponibles.</p>
+
+              <form id="horarioGlobalForm" class="space-y-3.5">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Hora de Inicio</label>
+                  <input id="inpHoraInicio" type="time" required value="${hg.horaInicioSalida}"
+                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Hora de Término</label>
+                  <input id="inpHoraFin" type="time" required value="${hg.horaFinSalida}"
+                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 mb-1">Días Aplicables</label>
+                  <input id="inpDiasActivos" type="text" required value="${hg.diasActivos}"
+                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs" />
+                </div>
+
+                <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
+                  Guardar Horario para Todas las Sedes
+                </button>
+              </form>
+            </div>
+
+            <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div>
+                  <h3 class="text-base font-extrabold text-slate-900">Sedes con Horario Aplicado (${hg.horaInicioSalida} - ${hg.horaFinSalida})</h3>
+                  <p class="text-xs text-slate-500">${SEDES_Y_GRADOS.length} sedes disponibles bajo este horario global.</p>
+                </div>
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800">${hg.diasActivos}</span>
+              </div>
+
+              <div class="overflow-x-auto border border-slate-200 rounded-xl max-h-96 overflow-y-auto">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th class="px-3 py-2.5">Código</th>
+                      <th class="px-3 py-2.5">Sede</th>
+                      <th class="px-3 py-2.5">Horario Asignado</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    ${SEDES_Y_GRADOS.map(s => `
+                      <tr>
+                        <td class="px-3 py-2.5 font-mono font-bold text-slate-700">${s.codigoSede}</td>
+                        <td class="px-3 py-2.5 font-semibold text-slate-900">${s.nombreSede}</td>
+                        <td class="px-3 py-2.5 font-mono text-emerald-800 font-bold">${hg.horaInicioSalida} - ${hg.horaFinSalida}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('horarioGlobalForm').addEventListener('submit', e => {
+        e.preventDefault();
+        appState.horarioGlobal = {
+          horaInicioSalida: document.getElementById('inpHoraInicio').value,
+          horaFinSalida: document.getElementById('inpHoraFin').value,
+          diasActivos: document.getElementById('inpDiasActivos').value.trim() || 'Lunes a Viernes',
+          actualizadoEn: getTodayISO()
+        };
+        saveState();
+        updateHeaderBadges();
+        syncTableEvent('UPDATE_HORARIO_GLOBAL', { horarioGlobal: appState.horarioGlobal });
+        renderCurrentTab();
+        showToast('Horario global guardado para todas las sedes.');
+      });
     }
   </script>
 </body>
