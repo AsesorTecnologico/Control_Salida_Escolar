@@ -9,6 +9,11 @@
     body { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .fade-in { animation: fadeIn 0.2s ease-in-out; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulseAlert {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.35); }
+      50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+    }
+    .alert-pulse { animation: pulseAlert 1.5s infinite; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-900 min-h-screen">
@@ -55,7 +60,7 @@
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center font-extrabold text-sm">AS</div>
           <div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="font-extrabold text-sm tracking-tight">AulaSalida Smart</span>
               <span id="roleBadge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-200 border border-blue-400/30"></span>
               <span id="fechaOperativaBadge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700"></span>
@@ -64,10 +69,10 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <button id="migrarDiaBtn" type="button"
             class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow">
-            Migrar Alumnos a Nuevo Día
+            Migrar Lista a Nuevo Día
           </button>
           <button id="recreateTablesBtn" type="button"
             class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow">
@@ -93,19 +98,23 @@
     // =========================================================================
     // 1. SEDES, GRADOS DISPONIBLES Y PERFILES DE ACCESO POR SEDE
     // =========================================================================
-    const STORAGE_KEY = 'aulasalida_smart_flow_v8';
+    const STORAGE_KEY = 'aulasalida_smart_flow_v9';
     const SHEETS_WEBHOOK_URL = '';
 
     const TABLES = {
       PERFILES_ACCESO: 'tbl_perfiles_acceso',
       SEDES_NIVELES: 'tbl_sedes_niveles',
+      AULAS_SEDE: 'tbl_aulas_sede',
       ALUMNOS: 'tbl_alumnos',
       NOTIFICACIONES_AULA: 'tbl_notificaciones_aula',
       SALIDAS_ESTUDIANTES: 'tbl_salidas_estudiantes'
     };
 
-    // Estados del flujo diario:
-    // 1. PENDIENTE_PUERTA -> 2. NOTIFICADO_A_AULA -> 3. EN_CAMINO_A_PUERTA (Tutor Aula confirma) -> 4. FINALIZADO (Termina el proceso)
+    const ASISTENCIA = {
+      PRESENTE: 'PRESENTE',
+      FALTA: 'FALTA'
+    };
+
     const FLOW_STEP = {
       PENDIENTE: 'PENDIENTE_PUERTA',
       NOTIFICADO_AULA: 'NOTIFICADO_A_AULA',
@@ -219,56 +228,89 @@
       box.textContent = msg;
       box.classList.remove('hidden');
       clearTimeout(window.__toastTimer);
-      window.__toastTimer = setTimeout(() => box.classList.add('hidden'), 3600);
+      window.__toastTimer = setTimeout(() => box.classList.add('hidden'), 3800);
     }
 
     // =========================================================================
-    // 2. REGISTROS DIARIOS Y MIGRACIÓN DE ALUMNOS AL DÍA SIGUIENTE
+    // 2. SONIDO DE ALERTA PARA NOTIFICACIÓN AL TUTOR DE AULA
+    // =========================================================================
+    let audioCtxInstance = null;
+
+    function playAlertSound() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!audioCtxInstance) {
+          audioCtxInstance = new AudioCtx();
+        }
+        if (audioCtxInstance.state === 'suspended') {
+          audioCtxInstance.resume();
+        }
+
+        const now = audioCtxInstance.currentTime;
+        const notes = [
+          { freq: 880, start: 0, dur: 0.16 },
+          { freq: 1174.66, start: 0.18, dur: 0.16 },
+          { freq: 880, start: 0.36, dur: 0.22 }
+        ];
+
+        notes.forEach(n => {
+          const osc = audioCtxInstance.createOscillator();
+          const gain = audioCtxInstance.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(n.freq, now + n.start);
+
+          gain.gain.setValueAtTime(0.001, now + n.start);
+          gain.gain.exponentialRampToValueAtTime(0.25, now + n.start + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + n.start + n.dur);
+
+          osc.connect(gain);
+          gain.connect(audioCtxInstance.destination);
+
+          osc.start(now + n.start);
+          osc.stop(now + n.start + n.dur + 0.02);
+        });
+      } catch (_) {}
+    }
+
+    // =========================================================================
+    // 3. REGISTROS DIARIOS, AULAS POR SEDE Y MIGRACIÓN DE ALUMNOS
     // =========================================================================
     function buildFreshTablesState() {
       const today = getTodayISO();
       const accessProfiles = buildAccessProfilesForSedes();
 
-      const tbl_perfiles_acceso = accessProfiles.map(p => ({
-        codigoPerfil: p.codigoPerfil,
-        usuario: p.usuario,
-        perfil: p.perfil,
-        nombre: p.nombre,
-        codigoSede: p.codigoSede,
-        nombreSede: p.nombreSede,
-        estado: p.estado
-      }));
-
-      const tbl_sedes_niveles = SEDES_Y_GRADOS.map(s => ({
-        codigoSede: s.codigoSede,
-        nombreSede: s.nombreSede,
-        hojaSede: s.sheetTab,
-        nivelesDisponibles: s.niveles.join(' y '),
-        gradosDisponibles: s.grados.join(' | ')
-      }));
+      const tbl_aulas_sede = [
+        { idAula: 'AUL-S01-1', codigoSede: 'S01', nombreAula: 'Aula 101', grado: '3° Grado A' },
+        { idAula: 'AUL-S01-2', codigoSede: 'S01', nombreAula: 'Aula 104', grado: '4° Grado B' },
+        { idAula: 'AUL-S01-3', codigoSede: 'S01', nombreAula: 'Aula I-02', grado: 'Inicial 5 Años' },
+        { idAula: 'AUL-S02-1', codigoSede: 'S02', nombreAula: 'Aula 202', grado: '2° Grado A' },
+        { idAula: 'AUL-S03-1', codigoSede: 'S03', nombreAula: 'Aula 305', grado: '5° Grado A' }
+      ];
 
       const tbl_alumnos = [
-        { codigoAlumno: 'ALU-101', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Mateo Quispe Ramos', grado: '3° Grado A', aula: 'Aula 101', etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-102', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Sofía Mendoza Díaz', grado: '3° Grado A', aula: 'Aula 101', etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-103', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Liam Huamán Castro', grado: '4° Grado B', aula: 'Aula 104', etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-104', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Valeria Salazar Ríos', grado: 'Inicial 5 Años', aula: 'Aula I-02', etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-201', codigoSede: 'S02', nombreSede: 'S02 - CAMPOY', nombreAlumno: 'Gabriel Herrera Luna', grado: '2° Grado A', aula: 'Aula 202', etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', fechaDia: today },
-        { codigoAlumno: 'ALU-301', codigoSede: 'S03', nombreSede: 'S03 - EL AGUSTINO', nombreAlumno: 'Camila Paredes Soto', grado: '5° Grado A', aula: 'Aula 305', etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', fechaDia: today }
+        { codigoAlumno: 'ALU-101', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Mateo Quispe Ramos', grado: '3° Grado A', aula: 'Aula 101', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
+        { codigoAlumno: 'ALU-102', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Sofía Mendoza Díaz', grado: '3° Grado A', aula: 'Aula 101', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
+        { codigoAlumno: 'ALU-103', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Liam Huamán Castro', grado: '4° Grado B', aula: 'Aula 104', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
+        { codigoAlumno: 'ALU-104', codigoSede: 'S01', nombreSede: 'S01 - CAJAMARCA', nombreAlumno: 'Valeria Salazar Ríos', grado: 'Inicial 5 Años', aula: 'Aula I-02', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
+        { codigoAlumno: 'ALU-201', codigoSede: 'S02', nombreSede: 'S02 - CAMPOY', nombreAlumno: 'Gabriel Herrera Luna', grado: '2° Grado A', aula: 'Aula 202', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', alertaVisualAula: false, fechaDia: today },
+        { codigoAlumno: 'ALU-301', codigoSede: 'S03', nombreSede: 'S03 - EL AGUSTINO', nombreAlumno: 'Camila Paredes Soto', grado: '5° Grado A', aula: 'Aula 305', asistencia: ASISTENCIA.PRESENTE, etapaFlujo: FLOW_STEP.PENDIENTE, horaNotifAula: '—', horaConfirmAula: '—', horaFinProceso: '—', fechaDia: today }
       ];
 
       return {
         fechaOperativa: today,
         accessProfiles,
-        tbl_perfiles_acceso,
-        tbl_sedes_niveles,
+        tbl_aulas_sede,
         tbl_alumnos,
         tbl_notificaciones_aula: [],
         tbl_salidas_estudiantes: []
       };
     }
 
-    // Migra los alumnos cargados conservando nombreAlumno, grado y aula,
-    // reiniciando el flujo diario y limpiando los registros del día anterior
+    // Siempre al día siguiente:
+    // - Todos los alumnos se activan con estado PRESENTE
+    // - Se conserva la lista de alumnos (nombreAlumno, grado, aula)
+    // - Se reinician los estados de salida y registros diarios
     function migrarListaAlumnosParaSiguienteDia(stateObj, nuevaFecha) {
       const targetDate = nuevaFecha || getNextDayISO(stateObj.fechaOperativa);
       stateObj.tbl_alumnos = stateObj.tbl_alumnos.map(a => ({
@@ -278,13 +320,14 @@
         nombreAlumno: a.nombreAlumno,
         grado: a.grado,
         aula: a.aula,
+        asistencia: ASISTENCIA.PRESENTE,
         etapaFlujo: FLOW_STEP.PENDIENTE,
         horaNotifAula: '—',
         horaConfirmAula: '—',
         horaFinProceso: '—',
+        alertaVisualAula: false,
         fechaDia: targetDate
       }));
-      // Los registros de notificaciones y salidas son diarios: se limpian al iniciar el nuevo día
       stateObj.tbl_notificaciones_aula = [];
       stateObj.tbl_salidas_estudiantes = [];
       stateObj.fechaOperativa = targetDate;
@@ -309,6 +352,9 @@
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed.tbl_alumnos) || !Array.isArray(parsed.accessProfiles)) {
           return buildFreshTablesState();
+        }
+        if (!Array.isArray(parsed.tbl_aulas_sede)) {
+          parsed.tbl_aulas_sede = buildFreshTablesState().tbl_aulas_sede;
         }
         ensureDayRollover(parsed);
         return parsed;
@@ -340,7 +386,7 @@
       updateHeaderDateBadge();
       syncTableEvent('MIGRAR_ALUMNOS_DIA', { nuevaFecha: siguienteFecha });
       if (currentUser) renderCurrentTab();
-      showToast(`Lista de alumnos migrada para el día ${siguienteFecha} (registros diarios reiniciados).`);
+      showToast(`Lista migrada al día ${siguienteFecha}: todos los alumnos en estado PRESENTE.`);
     }
 
     function recreateAllTablesNow() {
@@ -361,14 +407,27 @@
     let currentUser = null;
     let activeTab = '';
     let selectedSedeForAdmin = SEDES_Y_GRADOS[0].codigoSede;
+    let editingAulaId = null;
 
     function getActiveSedeCode() {
       if (!currentUser) return SEDES_Y_GRADOS[0].codigoSede;
       return currentUser.perfil === 'ADMINISTRADOR' ? selectedSedeForAdmin : currentUser.codigoSede;
     }
 
+    function getAulasDeSede(sedeCode) {
+      const fromTable = appState.tbl_aulas_sede.filter(a => a.codigoSede === sedeCode);
+      if (fromTable.length) return fromTable;
+      const fromAlumnos = Array.from(new Set(appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode).map(a => a.aula))).filter(Boolean);
+      return fromAlumnos.map((nombreAula, idx) => ({
+        idAula: `AUL-${sedeCode}-${idx + 1}`,
+        codigoSede: sedeCode,
+        nombreAula,
+        grado: ''
+      }));
+    }
+
     // =========================================================================
-    // 3. AUTENTICACIÓN POR SEDE Y PERFIL
+    // 4. AUTENTICACIÓN POR SEDE Y PERFIL
     // =========================================================================
     document.getElementById('loginForm').addEventListener('submit', e => {
       e.preventDefault();
@@ -398,6 +457,7 @@
 
     document.getElementById('logoutBtn').addEventListener('click', () => {
       currentUser = null;
+      editingAulaId = null;
       document.getElementById('appShell').classList.add('hidden');
       document.getElementById('loginScreen').classList.remove('hidden');
       document.getElementById('loginPass').value = '';
@@ -405,6 +465,7 @@
 
     function enterApp(acc) {
       currentUser = acc;
+      editingAulaId = null;
       ensureDayRollover(appState);
       updateHeaderDateBadge();
 
@@ -430,17 +491,17 @@
       if (perfil === 'TUTOR_PUERTA') {
         return [
           { id: 'tutorFlow', label: 'Flujo Puerta y Procesos (Sede)' },
-          { id: 'cargaAlumnos', label: 'Carga de Alumnos (Sede)' }
+          { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Sede)' }
         ];
       }
       if (perfil === 'TUTOR_AULA') {
         return [
-          { id: 'aulaModule', label: 'Módulo Aula y Procesos (Sede)' },
-          { id: 'cargaAlumnos', label: 'Carga de Alumnos (Sede)' }
+          { id: 'aulaModule', label: 'Módulo Tutor de Aula (Sede)' },
+          { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Sede)' }
         ];
       }
       return [
-        { id: 'cargaAlumnos', label: 'Carga de Alumnos (Por Sede)' },
+        { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Por Sede)' },
         { id: 'processBySede', label: 'Tabla de Procesos (Por Sede)' }
       ];
     }
@@ -469,7 +530,7 @@
       ensureDayRollover(appState);
       updateHeaderDateBadge();
       const container = document.getElementById('mainContent');
-      if (activeTab === 'cargaAlumnos') return renderCargaAlumnosPorSede(container);
+      if (activeTab === 'cargaAlumnos') return renderCargaAlumnosYAulasPorSede(container);
       if (activeTab === 'processBySede') return renderTablaProcesosPorSede(container);
       if (activeTab === 'tutorFlow') return renderTutorGateFlow(container);
       return renderTutorAulaModule(container);
@@ -495,29 +556,115 @@
       if (!picker) return;
       picker.addEventListener('change', () => {
         selectedSedeForAdmin = picker.value;
+        editingAulaId = null;
         renderCurrentTab();
       });
     }
 
     // =========================================================================
-    // 4. MÓDULO INDIVIDUAL DE CARGA DE ALUMNOS POR SEDE (SOLO: NOMBRE, GRADO, AULA)
+    // 5. AULAS POR SEDE (CREAR, EDITAR, ACTUALIZAR, ELIMINAR) +
+    //    CARGA DE ALUMNOS POR SEDE (AGREGAR, MIGRAR, ELIMINAR)
     // =========================================================================
-    function renderCargaAlumnosPorSede(container) {
+    function eliminarAlumnoSede(codigoAlumno) {
+      const sedeCode = getActiveSedeCode();
+      const idx = appState.tbl_alumnos.findIndex(a => a.codigoAlumno === codigoAlumno && a.codigoSede === sedeCode);
+      if (idx === -1) return;
+      const eliminado = appState.tbl_alumnos[idx];
+      appState.tbl_alumnos.splice(idx, 1);
+      saveState();
+      syncTableEvent('DELETE_ALUMNO_SEDE', { codigoAlumno, codigoSede: sedeCode });
+      renderCurrentTab();
+      showToast(`Alumno "${eliminado.nombreAlumno}" eliminado de la lista.`);
+    }
+
+    function eliminarAulaSede(idAula) {
+      const sedeCode = getActiveSedeCode();
+      const idx = appState.tbl_aulas_sede.findIndex(a => a.idAula === idAula && a.codigoSede === sedeCode);
+      if (idx === -1) return;
+      const aulaEliminada = appState.tbl_aulas_sede[idx];
+      appState.tbl_aulas_sede.splice(idx, 1);
+      if (editingAulaId === idAula) editingAulaId = null;
+      saveState();
+      syncTableEvent('DELETE_AULA_SEDE', { idAula, codigoSede: sedeCode });
+      renderCurrentTab();
+      showToast(`Aula "${aulaEliminada.nombreAula}" eliminada en ${sedeCode}.`);
+    }
+
+    function renderCargaAlumnosYAulasPorSede(container) {
       const sedeCode = getActiveSedeCode();
       const sedeCfg = getSedeConfig(sedeCode);
+      const aulasSede = getAulasDeSede(sedeCode);
       const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
+      const aulaEnEdicion = editingAulaId ? aulasSede.find(x => x.idAula === editingAulaId) : null;
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           ${renderAdminSedeSelectorHtml()}
 
+          <!-- GESTIÓN DE AULAS EN CADA SEDE -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div>
+                <h2 class="text-base font-extrabold text-slate-900">Aulas de la Sede — ${sedeCfg.nombreSede}</h2>
+                <p class="text-xs text-slate-500">Cree, edite, actualice o elimine aulas de forma individual para esta sede.</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">${aulasSede.length} aula(s)</span>
+            </div>
+
+            <form id="aulaSedeForm" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Nombre del Aula</label>
+                <input id="inpNombreAula" type="text" required value="${aulaEnEdicion ? aulaEnEdicion.nombreAula : ''}"
+                  placeholder="Ej. Aula 102"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Grado Asociado (opcional)</label>
+                <select id="inpGradoAula" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
+                  <option value="">— General / Sin grado fijo —</option>
+                  ${sedeCfg.grados.map(g => `<option value="${g}" ${aulaEnEdicion && aulaEnEdicion.grado === g ? 'selected' : ''}>${g}</option>`).join('')}
+                </select>
+              </div>
+              <div class="flex items-end gap-2">
+                <button type="submit" class="flex-1 py-2 px-3 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow">
+                  ${aulaEnEdicion ? 'Actualizar Aula' : 'Crear Aula'}
+                </button>
+                ${aulaEnEdicion ? `
+                  <button id="cancelEditAulaBtn" type="button" class="py-2 px-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold">
+                    Cancelar
+                  </button>
+                ` : ''}
+              </div>
+            </form>
+
+            <div class="flex flex-wrap gap-2">
+              ${aulasSede.length ? aulasSede.map(au => `
+                <div class="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs shadow-2xs">
+                  <div>
+                    <span class="font-bold text-slate-900">${au.nombreAula}</span>
+                    ${au.grado ? `<span class="text-[11px] text-slate-500 ml-1">(${au.grado})</span>` : ''}
+                  </div>
+                  <button type="button" data-edit-aula="${au.idAula}"
+                    class="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px]">
+                    Editar
+                  </button>
+                  <button type="button" data-del-aula="${au.idAula}"
+                    class="px-2 py-0.5 rounded bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px]">
+                    Eliminar
+                  </button>
+                </div>
+              `).join('') : `<p class="text-xs text-slate-400">No hay aulas creadas en esta sede.</p>`}
+            </div>
+          </div>
+
+          <!-- CARGA Y LISTA DE ALUMNOS DE LA SEDE -->
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm h-fit">
               <div class="flex items-center justify-between gap-2 mb-1">
                 <h2 class="text-base font-extrabold text-slate-900">Carga de Alumnos</h2>
                 <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800">${sedeCfg.codigoSede}</span>
               </div>
-              <p class="text-xs text-slate-500 mb-4">Registro diario de <strong>${sedeCfg.nombreSede}</strong> (migra automáticamente al siguiente día).</p>
+              <p class="text-xs text-slate-500 mb-4">Día <strong>${appState.fechaOperativa}</strong> &bull; Se cargan como <strong>PRESENTE</strong>.</p>
 
               <form id="cargaAlumnoSedeForm" class="space-y-3.5">
                 <div>
@@ -536,8 +683,12 @@
 
                 <div>
                   <label class="block text-xs font-bold text-slate-700 mb-1">Aula</label>
-                  <input id="inpAulaAlumno" type="text" required placeholder="Ej. Aula 201"
-                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                  <select id="inpAulaAlumno" required
+                    class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600">
+                    ${aulasSede.length
+                      ? aulasSede.map(au => `<option value="${au.nombreAula}">${au.nombreAula}</option>`).join('')
+                      : `<option value="Aula General">Aula General</option>`}
+                  </select>
                 </div>
 
                 <button type="submit" class="w-full py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
@@ -547,10 +698,10 @@
             </div>
 
             <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-              <div class="flex items-center justify-between gap-2 mb-3">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
                 <div>
-                  <h3 class="text-base font-extrabold text-slate-900">Alumnos Cargados — ${sedeCfg.nombreSede}</h3>
-                  <p class="text-xs text-slate-500">Día operativo: <strong>${appState.fechaOperativa}</strong> &bull; Nombre Alumno, Grado y Aula.</p>
+                  <h3 class="text-base font-extrabold text-slate-900">Lista de Alumnos — ${sedeCfg.nombreSede}</h3>
+                  <p class="text-xs text-slate-500">Esta lista puede migrar al día siguiente o eliminarse si es necesario.</p>
                 </div>
                 <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">${alumnosSede.length} alumno(s)</span>
               </div>
@@ -562,6 +713,8 @@
                       <th class="px-4 py-2.5">Nombre Alumno</th>
                       <th class="px-4 py-2.5">Grado</th>
                       <th class="px-4 py-2.5">Aula</th>
+                      <th class="px-4 py-2.5">Asistencia</th>
+                      <th class="px-4 py-2.5 text-right">Eliminar</th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-slate-100">
@@ -570,10 +723,17 @@
                         <td class="px-4 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
                         <td class="px-4 py-2.5 text-slate-700">${a.grado}</td>
                         <td class="px-4 py-2.5 font-semibold text-blue-800">${a.aula}</td>
+                        <td class="px-4 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
+                        <td class="px-4 py-2.5 text-right">
+                          <button type="button" data-del-alumno="${a.codigoAlumno}"
+                            class="px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px]">
+                            Eliminar
+                          </button>
+                        </td>
                       </tr>
                     `).join('') : `
                       <tr>
-                        <td colspan="3" class="px-4 py-8 text-center text-slate-400">No hay alumnos cargados en esta sede.</td>
+                        <td colspan="5" class="px-4 py-8 text-center text-slate-400">No hay alumnos cargados en esta sede.</td>
                       </tr>
                     `}
                   </tbody>
@@ -586,11 +746,71 @@
 
       bindAdminSedeSelector(container);
 
+      document.getElementById('aulaSedeForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const nombreAula = document.getElementById('inpNombreAula').value.trim();
+        const grado = document.getElementById('inpGradoAula').value;
+        if (!nombreAula) return;
+
+        if (editingAulaId) {
+          const aulaObj = appState.tbl_aulas_sede.find(x => x.idAula === editingAulaId && x.codigoSede === sedeCode);
+          if (aulaObj) {
+            const anteriorNombre = aulaObj.nombreAula;
+            aulaObj.nombreAula = nombreAula;
+            aulaObj.grado = grado;
+            appState.tbl_alumnos.forEach(al => {
+              if (al.codigoSede === sedeCode && al.aula === anteriorNombre) {
+                al.aula = nombreAula;
+              }
+            });
+            syncTableEvent('UPDATE_AULA_SEDE', { aula: aulaObj });
+            showToast(`Aula actualizada a "${nombreAula}".`);
+          }
+          editingAulaId = null;
+        } else {
+          const nuevaAula = {
+            idAula: `AUL-${sedeCode}-${Date.now().toString().slice(-4)}`,
+            codigoSede: sedeCode,
+            nombreAula,
+            grado
+          };
+          appState.tbl_aulas_sede.push(nuevaAula);
+          syncTableEvent('CREATE_AULA_SEDE', { aula: nuevaAula });
+          showToast(`Aula "${nombreAula}" creada en ${sedeCfg.nombreSede}.`);
+        }
+
+        saveState();
+        renderCurrentTab();
+      });
+
+      const cancelBtn = document.getElementById('cancelEditAulaBtn');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+          editingAulaId = null;
+          renderCurrentTab();
+        });
+      }
+
+      container.querySelectorAll('[data-edit-aula]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          editingAulaId = btn.dataset.editAula;
+          renderCurrentTab();
+        });
+      });
+
+      container.querySelectorAll('[data-del-aula]').forEach(btn => {
+        btn.addEventListener('click', () => eliminarAulaSede(btn.dataset.delAula));
+      });
+
+      container.querySelectorAll('[data-del-alumno]').forEach(btn => {
+        btn.addEventListener('click', () => eliminarAlumnoSede(btn.dataset.delAlumno));
+      });
+
       document.getElementById('cargaAlumnoSedeForm').addEventListener('submit', e => {
         e.preventDefault();
         const nombreAlumno = document.getElementById('inpNombreAlumno').value.trim();
         const grado = document.getElementById('inpGradoAlumno').value;
-        const aula = document.getElementById('inpAulaAlumno').value.trim();
+        const aula = document.getElementById('inpAulaAlumno').value;
         if (!nombreAlumno || !grado || !aula) return;
 
         const codigoAlumno = `ALU-${sedeCode}-${Date.now().toString().slice(-4)}`;
@@ -601,10 +821,12 @@
           nombreAlumno,
           grado,
           aula,
+          asistencia: ASISTENCIA.PRESENTE,
           etapaFlujo: FLOW_STEP.PENDIENTE,
           horaNotifAula: '—',
           horaConfirmAula: '—',
           horaFinProceso: '—',
+          alertaVisualAula: false,
           fechaDia: appState.fechaOperativa
         };
 
@@ -612,13 +834,21 @@
         saveState();
         syncTableEvent('ADD_ALUMNO_SEDE', { alumno: nuevoAlumno });
         renderCurrentTab();
-        showToast(`Alumno "${nombreAlumno}" agregado a ${sedeCfg.nombreSede}.`);
+        showToast(`Alumno "${nombreAlumno}" agregado como PRESENTE en ${aula}.`);
       });
     }
 
     // =========================================================================
-    // 5. FLUJO: TUTOR PUERTA NOTIFICA A AULA -> TUTOR AULA CONFIRMA -> TERMINA
+    // 6. FLUJO: TUTOR PUERTA NOTIFICA (CON SONIDO Y ALERTA VISUAL EN AULA) ->
+    //    TUTOR AULA CONFIRMA O MARCA FALTA -> TERMINA PROCESO
     // =========================================================================
+    function getAsistenciaBadge(asistencia) {
+      if (asistencia === ASISTENCIA.FALTA) {
+        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">FALTA</span>`;
+      }
+      return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">PRESENTE</span>`;
+    }
+
     function getEtapaBadge(etapa) {
       if (etapa === FLOW_STEP.FINALIZADO) {
         return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">PROCESO TERMINADO</span>`;
@@ -627,19 +857,25 @@
         return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800">CONFIRMADO POR AULA (A PUERTA)</span>`;
       }
       if (etapa === FLOW_STEP.NOTIFICADO_AULA) {
-        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">NOTIFICADO A TUTOR DE AULA</span>`;
+        return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">ALERTA: NOTIFICADO A AULA</span>`;
       }
-      return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">PENDIENTE EN PUERTA</span>`;
+      return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">PENDIENTE</span>`;
     }
 
-    // Paso 1: Tutor de la puerta notifica al tutor del aula
+    // Tutor de puerta notifica al tutor de aula (activa alerta visual + sonido de alerta)
     function tutorPuertaNotificarAula(codigoAlumno) {
       const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
       if (!st) return;
 
+      if (st.asistencia === ASISTENCIA.FALTA) {
+        showToast(`El alumno ${st.nombreAlumno} figura con FALTA el día de hoy.`);
+        return;
+      }
+
       const hora = getNowHHMM();
       st.etapaFlujo = FLOW_STEP.NOTIFICADO_AULA;
       st.horaNotifAula = hora;
+      st.alertaVisualAula = true;
       st.fechaDia = appState.fechaOperativa;
 
       appState.tbl_notificaciones_aula.unshift({
@@ -654,12 +890,30 @@
       });
 
       saveState();
+      playAlertSound();
       syncTableEvent('NOTIFICAR_TUTOR_AULA', { codigoAlumno, horaNotifAula: hora, fecha: appState.fechaOperativa });
       renderCurrentTab();
-      showToast(`Tutor de puerta notificó al tutor de aula: ${st.nombreAlumno} (${st.aula}).`);
+      showToast(`Alerta sonora y visual enviada al Tutor de Aula: ${st.nombreAlumno} (${st.aula}).`);
     }
 
-    // Paso 2: Tutor de aula confirma que el alumno se dirige a la puerta
+    // Tutor de aula puede marcar falta si el alumno faltó el día de hoy
+    function tutorAulaMarcarFalta(codigoAlumno) {
+      const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
+      if (!st) return;
+
+      st.asistencia = st.asistencia === ASISTENCIA.FALTA ? ASISTENCIA.PRESENTE : ASISTENCIA.FALTA;
+      if (st.asistencia === ASISTENCIA.FALTA) {
+        st.alertaVisualAula = false;
+        st.etapaFlujo = FLOW_STEP.PENDIENTE;
+      }
+
+      saveState();
+      syncTableEvent('TOGGLE_FALTA_AULA', { codigoAlumno, asistencia: st.asistencia, fecha: appState.fechaOperativa });
+      renderCurrentTab();
+      showToast(`${st.nombreAlumno} marcado como ${st.asistencia}.`);
+    }
+
+    // Tutor de aula confirma que el alumno se dirige a la puerta
     function tutorAulaConfirmarAlumnoAPuerta(codigoAlumno) {
       const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
       if (!st) return;
@@ -667,6 +921,7 @@
       const hora = getNowHHMM();
       st.etapaFlujo = FLOW_STEP.CONFIRMADO_AULA;
       st.horaConfirmAula = hora;
+      st.alertaVisualAula = false;
 
       saveState();
       syncTableEvent('CONFIRMAR_ALUMNO_A_PUERTA', { codigoAlumno, horaConfirmAula: hora, fecha: appState.fechaOperativa });
@@ -674,7 +929,7 @@
       showToast(`Tutor de aula confirmó que ${st.nombreAlumno} se dirige a la puerta.`);
     }
 
-    // Paso 3: Termina el proceso (entrega en puerta / cierre del registro diario)
+    // Termina el proceso
     function terminarProcesoSalida(codigoAlumno) {
       const st = appState.tbl_alumnos.find(a => a.codigoAlumno === codigoAlumno && a.codigoSede === currentUser.codigoSede);
       if (!st) return;
@@ -682,6 +937,7 @@
       const hora = getNowHHMM();
       st.etapaFlujo = FLOW_STEP.FINALIZADO;
       st.horaFinProceso = hora;
+      st.alertaVisualAula = false;
 
       appState.tbl_salidas_estudiantes.unshift({
         fecha: appState.fechaOperativa,
@@ -708,27 +964,9 @@
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
-          <div class="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-            <p class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">Flujo Diario de Salida — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</p>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-              <div class="p-3 rounded-xl bg-blue-50 border border-blue-200">
-                <span class="font-extrabold text-blue-900 block">1. Tutor de Puerta notifica al Tutor de Aula</span>
-                <span class="text-[11px] text-blue-800">Con la lista de alumnos que llegan a recoger</span>
-              </div>
-              <div class="p-3 rounded-xl bg-indigo-50 border border-indigo-200">
-                <span class="font-extrabold text-indigo-900 block">2. Tutor de Aula confirma envío a puerta</span>
-                <span class="text-[11px] text-indigo-800">Confirma que el alumno se dirige a la puerta</span>
-              </div>
-              <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                <span class="font-extrabold text-emerald-900 block">3. Termina el proceso</span>
-                <span class="text-[11px] text-emerald-800">Cierra el registro diario del alumno</span>
-              </div>
-            </div>
-          </div>
-
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <h2 class="text-sm font-extrabold text-slate-900 mb-1">Tabla de Procesos Individual — ${sedeCfg.nombreSede}</h2>
-            <p class="text-xs text-slate-500 mb-4">Registro diario correspondiente únicamente a <strong>${sedeCfg.nombreSede}</strong>.</p>
+            <h2 class="text-sm font-extrabold text-slate-900 mb-1">Tabla de Procesos Individual — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
+            <p class="text-xs text-slate-500 mb-4">Al notificar a aula se emite un sonido de alerta y se activa la notificación visual para el Tutor de Aula.</p>
 
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
@@ -737,6 +975,7 @@
                     <th class="px-3 py-2.5">Nombre Alumno</th>
                     <th class="px-3 py-2.5">Grado</th>
                     <th class="px-3 py-2.5">Aula</th>
+                    <th class="px-3 py-2.5">Asistencia</th>
                     <th class="px-3 py-2.5">Estado</th>
                     <th class="px-3 py-2.5">Notif. Aula</th>
                     <th class="px-3 py-2.5">Conf. Aula</th>
@@ -750,6 +989,7 @@
                       <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
                       <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
                       <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
+                      <td class="px-3 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
                       <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo)}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaNotifAula}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaConfirmAula}</td>
@@ -787,12 +1027,32 @@
       const sedeCode = currentUser.codigoSede;
       const sedeCfg = getSedeConfig(sedeCode);
       const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
+      const alertasActivas = alumnosSede.filter(a => a.alertaVisualAula && a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA);
+
+      if (alertasActivas.length > 0) {
+        playAlertSound();
+      }
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
+          ${alertasActivas.length ? `
+            <div class="p-4 rounded-2xl bg-rose-50 border-2 border-rose-500 text-rose-950 alert-pulse flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-extrabold uppercase tracking-wider text-rose-700">Alerta de Notificación desde Puerta</p>
+                <p class="text-xs font-semibold mt-0.5">
+                  ${alertasActivas.map(x => `${x.nombreAlumno} (${x.grado} — ${x.aula})`).join(' • ')}
+                </p>
+              </div>
+              <button id="replayAlertSoundBtn" type="button"
+                class="px-3 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold shadow">
+                Reproducir Sonido de Alerta
+              </button>
+            </div>
+          ` : ''}
+
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <h2 class="text-base font-extrabold text-slate-900 mb-1">Módulo Tutor de Aula — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
-            <p class="text-xs text-slate-500 mb-4">Confirme cuando el alumno se dirige a la puerta o cierre el proceso una vez entregado.</p>
+            <p class="text-xs text-slate-500 mb-4">Todos inician como <strong>PRESENTE</strong> cada día. Puede indicar <strong>FALTA</strong>, confirmar que el alumno va a puerta o terminar el proceso.</p>
 
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
@@ -801,6 +1061,7 @@
                     <th class="px-3 py-2.5">Nombre Alumno</th>
                     <th class="px-3 py-2.5">Grado</th>
                     <th class="px-3 py-2.5">Aula</th>
+                    <th class="px-3 py-2.5">Asistencia</th>
                     <th class="px-3 py-2.5">Estado</th>
                     <th class="px-3 py-2.5">Hora Notif.</th>
                     <th class="px-3 py-2.5">Hora Conf.</th>
@@ -809,21 +1070,26 @@
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                   ${alumnosSede.map(a => `
-                    <tr>
+                    <tr class="${a.alertaVisualAula ? 'bg-rose-50/70' : ''}">
                       <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
                       <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
                       <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
+                      <td class="px-3 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
                       <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo)}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaNotifAula}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaConfirmAula}</td>
                       <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
-                        ${a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA ? `
+                        <button type="button" data-falta-aula="${a.codigoAlumno}"
+                          class="px-2.5 py-1 rounded-lg ${a.asistencia === ASISTENCIA.FALTA ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-800'} font-bold text-[11px]">
+                          ${a.asistencia === ASISTENCIA.FALTA ? 'Marcar Presente' : 'Indicar Falta'}
+                        </button>
+                        ${a.asistencia === ASISTENCIA.PRESENTE && a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA ? `
                           <button type="button" data-confirmar-puerta="${a.codigoAlumno}"
                             class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px]">
                             Confirmar Alumno a Puerta
                           </button>
                         ` : ''}
-                        ${a.etapaFlujo === FLOW_STEP.CONFIRMADO_AULA ? `
+                        ${a.asistencia === ASISTENCIA.PRESENTE && a.etapaFlujo === FLOW_STEP.CONFIRMADO_AULA ? `
                           <button type="button" data-terminar-aula="${a.codigoAlumno}"
                             class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]">
                             Terminar Proceso
@@ -842,6 +1108,14 @@
         </div>
       `;
 
+      const replayBtn = document.getElementById('replayAlertSoundBtn');
+      if (replayBtn) {
+        replayBtn.addEventListener('click', playAlertSound);
+      }
+
+      container.querySelectorAll('[data-falta-aula]').forEach(btn => {
+        btn.addEventListener('click', () => tutorAulaMarcarFalta(btn.dataset.faltaAula));
+      });
       container.querySelectorAll('[data-confirmar-puerta]').forEach(btn => {
         btn.addEventListener('click', () => tutorAulaConfirmarAlumnoAPuerta(btn.dataset.confirmarPuerta));
       });
@@ -875,6 +1149,7 @@
                     <th class="px-3 py-2.5">Nombre Alumno</th>
                     <th class="px-3 py-2.5">Grado</th>
                     <th class="px-3 py-2.5">Aula</th>
+                    <th class="px-3 py-2.5">Asistencia</th>
                     <th class="px-3 py-2.5">Estado del Proceso</th>
                     <th class="px-3 py-2.5">Hora Notif. Aula</th>
                     <th class="px-3 py-2.5">Hora Conf. Aula</th>
@@ -887,6 +1162,7 @@
                       <td class="px-3 py-2.5 font-bold text-slate-900">${p.nombreAlumno}</td>
                       <td class="px-3 py-2.5 text-slate-700">${p.grado}</td>
                       <td class="px-3 py-2.5 font-semibold text-blue-800">${p.aula}</td>
+                      <td class="px-3 py-2.5">${getAsistenciaBadge(p.asistencia)}</td>
                       <td class="px-3 py-2.5">${getEtapaBadge(p.etapaFlujo)}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${p.horaNotifAula}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${p.horaConfirmAula}</td>
@@ -894,7 +1170,7 @@
                     </tr>
                   `).join('') : `
                     <tr>
-                      <td colspan="7" class="px-4 py-8 text-center text-slate-400">No hay registros para esta sede.</td>
+                      <td colspan="8" class="px-4 py-8 text-center text-slate-400">No hay registros para esta sede.</td>
                     </tr>
                   `}
                 </tbody>
