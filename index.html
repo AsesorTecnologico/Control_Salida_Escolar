@@ -88,7 +88,7 @@
     // =========================================================================
     // 1. SEDES, GRADOS DISPONIBLES Y PERFILES DE ACCESO POR SEDE
     // =========================================================================
-    const STORAGE_KEY = 'aulasalida_smart_flow_v11';
+    const STORAGE_KEY = 'aulasalida_smart_flow_v12';
     const SHEETS_WEBHOOK_URL = '';
 
     const ASISTENCIA = {
@@ -508,6 +508,8 @@
     let activeTab = '';
     let selectedSedeForAdmin = SEDES_Y_GRADOS[0].codigoSede;
     let editingAulaId = null;
+    let tutorPuertaApellidoQuery = '';
+    let tutorPuertaSelectedIds = new Set();
 
     function getActiveSedeCode() {
       if (!currentUser) return SEDES_Y_GRADOS[0].codigoSede;
@@ -570,6 +572,8 @@
         stopContinuousAlarmLoop();
         currentUser = null;
         editingAulaId = null;
+        tutorPuertaApellidoQuery = '';
+        tutorPuertaSelectedIds.clear();
         document.getElementById('appShell').classList.add('hidden');
         document.getElementById('loginScreen').classList.remove('hidden');
         document.getElementById('loginPass').value = '';
@@ -1185,30 +1189,79 @@
       showToast(`Proceso terminado para ${st.nombreAlumno}.`);
     }
 
+    function coincideApellido(nombreCompleto, query) {
+      const q = (query || '').trim().toLowerCase();
+      if (!q) return true;
+      const partes = String(nombreCompleto || '').toLowerCase().split(/\s+/).filter(Boolean);
+      // Coincide si el texto coincide con cualquier palabra del nombre/apellido (priorizando apellidos/palabras completas o prefijos)
+      return partes.some(p => p.includes(q)) || String(nombreCompleto || '').toLowerCase().includes(q);
+    }
+
     function renderTutorGateFlow(container) {
       const sedeCode = currentUser.codigoSede;
       const sedeCfg = getSedeConfig(sedeCode);
       const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
+      const alumnosFiltrados = alumnosSede.filter(a => coincideApellido(a.nombreAlumno, tutorPuertaApellidoQuery));
+
+      // Mantener solo IDs válidos de la sede
+      const validIds = new Set(alumnosSede.map(a => a.codigoAlumno));
+      Array.from(tutorPuertaSelectedIds).forEach(id => {
+        if (!validIds.has(id)) tutorPuertaSelectedIds.delete(id);
+      });
+
+      const elegiblesFiltrados = alumnosFiltrados.filter(a => a.asistencia !== ASISTENCIA.FALTA);
+      const todosFiltradosMarcados = elegiblesFiltrados.length > 0 &&
+        elegiblesFiltrados.every(a => tutorPuertaSelectedIds.has(a.codigoAlumno));
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div>
                 <h2 class="text-sm font-extrabold text-slate-900">Tabla de Procesos Individual — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
-                <p class="text-xs text-slate-500">Seleccione uno o varios alumnos para notificar al aula o notifique individualmente.</p>
+                <p class="text-xs text-slate-500">Busque por apellido para ubicar rápido y vaya seleccionando alumnos; su selección se conserva al filtrar.</p>
               </div>
-              <button id="notificarSeleccionadosBtn" type="button"
-                class="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow">
-                Notificar Seleccionados a Aula
-              </button>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">
+                  ${tutorPuertaSelectedIds.size} seleccionado(s)
+                </span>
+                ${tutorPuertaSelectedIds.size > 0 ? `
+                  <button id="limpiarSeleccionPuertaBtn" type="button"
+                    class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition">
+                    Limpiar Selección
+                  </button>
+                ` : ''}
+                <button id="notificarSeleccionadosBtn" type="button"
+                  class="px-3 py-1.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
+                  Notificar Seleccionados a Aula (${tutorPuertaSelectedIds.size})
+                </button>
+              </div>
+            </div>
+
+            <!-- BUSCADOR POR APELLIDO -->
+            <div class="mb-4 flex flex-wrap items-center gap-2">
+              <div class="relative flex-1 min-w-[220px]">
+                <input id="inpBuscarApellidoPuerta" type="text"
+                  value="${tutorPuertaApellidoQuery}"
+                  placeholder="Buscar alumno por apellido (ej. Quispe, Mendoza, Huamán)..."
+                  class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+              </div>
+              ${tutorPuertaApellidoQuery ? `
+                <button id="btnLimpiarApellidoPuerta" type="button"
+                  class="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition">
+                  Borrar Búsqueda
+                </button>
+              ` : ''}
+              <span class="text-[11px] font-semibold text-slate-500">
+                Mostrando ${alumnosFiltrados.length} de ${alumnosSede.length} alumno(s)
+              </span>
             </div>
 
             <div class="overflow-x-auto border border-slate-200 rounded-xl">
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
-                    <th class="px-3 py-2.5 w-8"><input id="chkTodosPuerta" type="checkbox" /></th>
+                    <th class="px-3 py-2.5 w-8"><input id="chkTodosPuerta" type="checkbox" ${todosFiltradosMarcados ? 'checked' : ''} /></th>
                     <th class="px-3 py-2.5">Nombre Alumno</th>
                     <th class="px-3 py-2.5">Grado</th>
                     <th class="px-3 py-2.5">Aula</th>
@@ -1221,31 +1274,44 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                  ${alumnosSede.map(a => `
-                    <tr>
-                      <td class="px-3 py-2.5"><input type="checkbox" name="chkAlumnoPuerta" value="${a.codigoAlumno}" ${a.asistencia === ASISTENCIA.FALTA ? 'disabled' : ''} /></td>
-                      <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
-                      <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
-                      <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
-                      <td class="px-3 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
-                      <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo, a.alarmaActiva)}</td>
-                      <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaNotifAula}</td>
-                      <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaConfirmAula}</td>
-                      <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaFinProceso}</td>
-                      <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
-                        <button type="button" data-notificar-aula="${a.codigoAlumno}"
-                          class="px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-[11px]">
-                          Notificar a Aula
-                        </button>
-                        ${a.etapaFlujo === FLOW_STEP.CONFIRMADO_AULA ? `
-                          <button type="button" data-terminar="${a.codigoAlumno}"
-                            class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]">
-                            Terminar Proceso
+                  ${alumnosFiltrados.length ? alumnosFiltrados.map(a => {
+                    const isChecked = tutorPuertaSelectedIds.has(a.codigoAlumno) && a.asistencia !== ASISTENCIA.FALTA;
+                    return `
+                      <tr class="${isChecked ? 'bg-blue-50/70' : ''}">
+                        <td class="px-3 py-2.5">
+                          <input type="checkbox" name="chkAlumnoPuerta" value="${a.codigoAlumno}"
+                            ${isChecked ? 'checked' : ''}
+                            ${a.asistencia === ASISTENCIA.FALTA ? 'disabled' : ''} />
+                        </td>
+                        <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
+                        <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
+                        <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
+                        <td class="px-3 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
+                        <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo, a.alarmaActiva)}</td>
+                        <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaNotifAula}</td>
+                        <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaConfirmAula}</td>
+                        <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaFinProceso}</td>
+                        <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
+                          <button type="button" data-notificar-aula="${a.codigoAlumno}"
+                            class="px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-[11px]">
+                            Notificar a Aula
                           </button>
-                        ` : ''}
+                          ${a.etapaFlujo === FLOW_STEP.CONFIRMADO_AULA ? `
+                            <button type="button" data-terminar="${a.codigoAlumno}"
+                              class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]">
+                              Terminar Proceso
+                            </button>
+                          ` : ''}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('') : `
+                    <tr>
+                      <td colspan="10" class="px-4 py-8 text-center text-slate-400">
+                        No se encontraron alumnos con el apellido "${tutorPuertaApellidoQuery}".
                       </td>
                     </tr>
-                  `).join('')}
+                  `}
                 </tbody>
               </table>
             </div>
@@ -1253,29 +1319,83 @@
         </div>
       `;
 
+      const buscarInp = document.getElementById('inpBuscarApellidoPuerta');
+      if (buscarInp) {
+        buscarInp.addEventListener('input', e => {
+          tutorPuertaApellidoQuery = e.target.value;
+          const cursorPos = e.target.selectionStart;
+          renderCurrentTab();
+          const nextInp = document.getElementById('inpBuscarApellidoPuerta');
+          if (nextInp) {
+            nextInp.focus();
+            if (typeof cursorPos === 'number') {
+              nextInp.setSelectionRange(cursorPos, cursorPos);
+            }
+          }
+        });
+      }
+
+      const borrarBusqBtn = document.getElementById('btnLimpiarApellidoPuerta');
+      if (borrarBusqBtn) {
+        borrarBusqBtn.addEventListener('click', () => {
+          tutorPuertaApellidoQuery = '';
+          renderCurrentTab();
+        });
+      }
+
+      const limpiarSelBtn = document.getElementById('limpiarSeleccionPuertaBtn');
+      if (limpiarSelBtn) {
+        limpiarSelBtn.addEventListener('click', () => {
+          tutorPuertaSelectedIds.clear();
+          renderCurrentTab();
+        });
+      }
+
+      container.querySelectorAll('input[name="chkAlumnoPuerta"]').forEach(chk => {
+        chk.addEventListener('change', () => {
+          if (chk.checked) {
+            tutorPuertaSelectedIds.add(chk.value);
+          } else {
+            tutorPuertaSelectedIds.delete(chk.value);
+          }
+          renderCurrentTab();
+        });
+      });
+
       const chkTodos = document.getElementById('chkTodosPuerta');
       if (chkTodos) {
         chkTodos.addEventListener('change', () => {
-          container.querySelectorAll('input[name="chkAlumnoPuerta"]:not(:disabled)').forEach(c => {
-            c.checked = chkTodos.checked;
+          elegiblesFiltrados.forEach(a => {
+            if (chkTodos.checked) {
+              tutorPuertaSelectedIds.add(a.codigoAlumno);
+            } else {
+              tutorPuertaSelectedIds.delete(a.codigoAlumno);
+            }
           });
+          renderCurrentTab();
         });
       }
 
       const notifSelBtn = document.getElementById('notificarSeleccionadosBtn');
       if (notifSelBtn) {
         notifSelBtn.addEventListener('click', () => {
-          const seleccionados = Array.from(container.querySelectorAll('input[name="chkAlumnoPuerta"]:checked')).map(c => c.value);
+          const seleccionados = Array.from(tutorPuertaSelectedIds);
           if (!seleccionados.length) {
             showToast('Seleccione al menos un alumno.');
             return;
           }
           tutorPuertaNotificarAlumnos(seleccionados);
+          tutorPuertaSelectedIds.clear();
+          renderCurrentTab();
         });
       }
 
       container.querySelectorAll('[data-notificar-aula]').forEach(btn => {
-        btn.addEventListener('click', () => tutorPuertaNotificarAlumnos(btn.dataset.notificarAula));
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.notificarAula;
+          tutorPuertaSelectedIds.delete(id);
+          tutorPuertaNotificarAlumnos(id);
+        });
       });
       container.querySelectorAll('[data-terminar]').forEach(btn => {
         btn.addEventListener('click', () => terminarProcesoSalida(btn.dataset.terminar));
@@ -1287,25 +1407,48 @@
       const sedeCfg = getSedeConfig(sedeCode);
       const alumnosSede = appState.tbl_alumnos.filter(a => a.codigoSede === sedeCode);
       const alumnosConAlarma = alumnosSede.filter(
-        a => a.alarmaActiva && a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA && a.asistencia === ASISTENCIA.PRESENTE
+        a => (a.alarmaActiva || a.etapaFlujo === FLOW_STEP.NOTIFICADO_AULA) && a.asistencia === ASISTENCIA.PRESENTE
       );
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
-          ${alumnosConAlarma.length ? `
-            <div class="p-4 rounded-2xl bg-rose-50 border-2 border-rose-500 text-rose-950 alert-pulse flex flex-wrap items-center justify-between gap-3">
+          <div class="p-4 rounded-2xl ${alumnosConAlarma.length ? 'bg-rose-50 border-2 border-rose-500 text-rose-950 alert-pulse' : 'bg-white border border-slate-200 text-slate-700'} shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
               <div>
-                <p class="text-xs font-extrabold uppercase tracking-wider text-rose-700">Alarma Activa — Permanece Encendida Hasta Indicar "Va a la Puerta"</p>
-                <p class="text-xs font-semibold mt-0.5">
-                  ${alumnosConAlarma.map(x => `${x.nombreAlumno} (${x.grado} — ${x.aula})`).join(' • ')}
+                <p class="text-xs font-extrabold uppercase tracking-wider ${alumnosConAlarma.length ? 'text-rose-700' : 'text-slate-600'}">
+                  ${alumnosConAlarma.length ? `Alumnos con Alerta Activa (${alumnosConAlarma.length}) — Hasta Indicar "Va a la Puerta"` : 'Sin Alertas Activas en Este Momento'}
+                </p>
+                <p class="text-xs ${alumnosConAlarma.length ? 'text-rose-900 font-medium' : 'text-slate-500'} mt-0.5">
+                  ${alumnosConAlarma.length
+                    ? 'Estos alumnos permanecen en alerta hasta que se indique que van a la puerta.'
+                    : 'Cuando Puerta notifique a un alumno, aparecerá aquí con alerta hasta indicar que va a la puerta.'}
                 </p>
               </div>
-              <button id="indicarTodosPuertaBtn" type="button"
-                class="px-3.5 py-2 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow">
-                Indicar que Todos Van a la Puerta (Desactivar Alarma)
-              </button>
+              ${alumnosConAlarma.length ? `
+                <button id="indicarTodosPuertaBtn" type="button"
+                  class="px-3.5 py-2 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow">
+                  Indicar que Todos Van a la Puerta
+                </button>
+              ` : ''}
             </div>
-          ` : ''}
+
+            ${alumnosConAlarma.length ? `
+              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                ${alumnosConAlarma.map(x => `
+                  <div class="bg-white rounded-xl border border-rose-300 p-3 flex items-center justify-between gap-2 shadow-2xs">
+                    <div>
+                      <p class="text-xs font-extrabold text-slate-900">${x.nombreAlumno}</p>
+                      <p class="text-[11px] text-slate-600">${x.grado} &bull; <span class="font-bold text-blue-800">${x.aula}</span> &bull; Notif: <span class="font-mono">${x.horaNotifAula}</span></p>
+                    </div>
+                    <button type="button" data-ir-puerta="${x.codigoAlumno}"
+                      class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold whitespace-nowrap">
+                      Va a la Puerta
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
 
           <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
             <h2 class="text-base font-extrabold text-slate-900 mb-1">Módulo Tutor de Aula — ${sedeCfg.nombreSede} (${appState.fechaOperativa})</h2>
