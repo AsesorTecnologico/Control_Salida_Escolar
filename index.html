@@ -91,9 +91,10 @@
     const STORAGE_KEY = 'aulasalida_smart_flow_v15';
     const SYNC_CHANNEL_NAME = 'aulasalida_smart_sync_v15';
     const DEFAULT_SYNC_BUCKET_ID = 'aulasalida_smart_sede_sync_2026_v1';
-    // Proyecto Apps Script: 16XxLcY6erXba6kZULeaqC7bvV3pXXK1A99qSwlNN9O2alv7HpDmkwTSH
-    // Coloca aquí la URL de implementación Web App (termina en /exec, no /edit):
-    const APPS_SCRIPT_WEB_APP_URL = '';
+    // Editor Apps Script: https://script.google.com/u/0/home/projects/16XxLcY6erXba6kZULeaqC7bvV3pXXK1A99qSwlNN9O2alv7HpDmkwTSH/edit
+    // Hoja vinculada en Code.gs: 1J4cZu3AJS0SrXTFDPc1i75Y3bWVwp3x1SKRURxgLQg0
+    // Pega aquí la URL de implementación (Web App) que termina en /exec:
+    const APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwyqqKyHX8T0AmODEl4XYqGD3Xp8jNERGA4v88iu9jcS_l7HhsjqJE7-F-VL08FYUIt9w/exec';
 
     const syncChannel = (typeof BroadcastChannel !== 'undefined')
       ? new BroadcastChannel(SYNC_CHANNEL_NAME)
