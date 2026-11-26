@@ -322,41 +322,41 @@
     }
 
     // =========================================================================
-    // 3. ESTADO DIARIO, AULAS PERMANENTES, HORARIOS POR NIVEL/AULA/SEDE Y MIGRACIÓN
+    // 3. ESTADO DIARIO, AULAS PERMANENTES, HORARIOS POR SEDE Y MIGRACIÓN
     // =========================================================================
     function buildDefaultHorariosPorNivel() {
       return {
         Inicial: {
+          nivel: 'Inicial',
           horaIngreso: '08:30',
           horaSalida: '13:30',
-          diasActivos: 'Lunes a Viernes'
+          diasActivos: 'Lunes a Viernes',
+          actualizadoEn: getTodayISO()
         },
         Primaria: {
+          nivel: 'Primaria',
           horaIngreso: '07:45',
           horaSalida: '13:50',
-          diasActivos: 'Lunes a Viernes'
+          diasActivos: 'Lunes a Viernes',
+          actualizadoEn: getTodayISO()
         }
       };
     }
 
-    function detectNivelFromGrado(gradoStr = '') {
-      const g = String(gradoStr || '').toLowerCase();
-      if (g.includes('inicial') || g.includes('años') || g.includes('anos')) {
-        return 'Inicial';
-      }
-      return 'Primaria';
+    function getNivelDeGrado(gradoStr = '') {
+      return String(gradoStr).toLowerCase().includes('inicial') ? 'Inicial' : 'Primaria';
     }
 
-    function getHorarioPorNivel(nivel) {
+    function getHorarioDeNivel(nivelStr = 'Primaria') {
+      const defaults = buildDefaultHorariosPorNivel();
       if (!appState.horariosPorNivel) {
-        appState.horariosPorNivel = buildDefaultHorariosPorNivel();
+        appState.horariosPorNivel = defaults;
       }
-      const def = buildDefaultHorariosPorNivel();
-      const target = nivel === 'Inicial' ? 'Inicial' : 'Primaria';
-      if (!appState.horariosPorNivel[target]) {
-        appState.horariosPorNivel[target] = { ...def[target] };
+      const key = nivelStr === 'Inicial' ? 'Inicial' : 'Primaria';
+      if (!appState.horariosPorNivel[key]) {
+        appState.horariosPorNivel[key] = defaults[key];
       }
-      return appState.horariosPorNivel[target];
+      return appState.horariosPorNivel[key];
     }
 
     function buildDefaultHorarioGlobal() {
@@ -364,25 +364,24 @@
       return {
         horaInicioSalida: prim.horaIngreso,
         horaFinSalida: prim.horaSalida,
-        diasActivos: prim.diasActivos,
+        diasActivos: 'Lunes a Viernes',
         actualizadoEn: getTodayISO()
       };
     }
 
     function buildDefaultHorariosPorSede(baseHorario = buildDefaultHorarioGlobal()) {
       const map = {};
+      const nivelesDef = buildDefaultHorariosPorNivel();
       SEDES_Y_GRADOS.forEach(s => {
-        const defaultNivel = s.niveles && s.niveles.includes('Inicial') && !s.niveles.includes('Primaria')
-          ? 'Inicial'
-          : 'Primaria';
-        const hNivel = getHorarioPorNivel(defaultNivel);
+        const tieneInicial = Array.isArray(s.niveles) && s.niveles.includes('Inicial');
+        const nivelRef = tieneInicial ? nivelesDef.Inicial : nivelesDef.Primaria;
         map[s.codigoSede] = {
           codigoSede: s.codigoSede,
           nombreSede: s.nombreSede,
-          horaInicioSalida: hNivel ? hNivel.horaIngreso : baseHorario.horaInicioSalida,
-          horaFinSalida: hNivel ? hNivel.horaSalida : baseHorario.horaFinSalida,
-          diasActivos: hNivel ? hNivel.diasActivos : baseHorario.diasActivos,
-          actualizadoEn: baseHorario.actualizadoEn || getTodayISO()
+          horaInicioSalida: baseHorario && baseHorario.horaInicioSalida ? baseHorario.horaInicioSalida : nivelRef.horaIngreso,
+          horaFinSalida: baseHorario && baseHorario.horaFinSalida ? baseHorario.horaFinSalida : nivelRef.horaSalida,
+          diasActivos: (baseHorario && baseHorario.diasActivos) || 'Lunes a Viernes',
+          actualizadoEn: getTodayISO()
         };
       });
       return map;
@@ -395,38 +394,47 @@
       }
       if (!appState.horariosPorSede[sedeCode]) {
         const s = getSedeConfig(sedeCode);
-        const hNivel = getHorarioPorNivel('Primaria');
+        const nivelDef = getHorarioDeNivel(s.niveles && s.niveles.includes('Inicial') ? 'Inicial' : 'Primaria');
         appState.horariosPorSede[sedeCode] = {
           codigoSede: s.codigoSede,
           nombreSede: s.nombreSede,
-          horaInicioSalida: hNivel.horaIngreso,
-          horaFinSalida: hNivel.horaSalida,
-          diasActivos: hNivel.diasActivos,
+          horaInicioSalida: nivelDef.horaIngreso,
+          horaFinSalida: nivelDef.horaSalida,
+          diasActivos: nivelDef.diasActivos,
           actualizadoEn: getTodayISO()
         };
       }
       return appState.horariosPorSede[sedeCode];
     }
 
-    function getHorarioParaAula(aulaObj, sedeCode) {
-      const nivel = aulaObj && aulaObj.nivel
-        ? aulaObj.nivel
-        : detectNivelFromGrado(aulaObj && aulaObj.grado ? aulaObj.grado : '');
-      const hNivel = getHorarioPorNivel(nivel);
-      const horaIngreso = (aulaObj && aulaObj.horaIngreso) ? aulaObj.horaIngreso : hNivel.horaIngreso;
-      const horaSalida = (aulaObj && aulaObj.horaSalida) ? aulaObj.horaSalida : hNivel.horaSalida;
-      const diasActivos = (aulaObj && aulaObj.diasActivos) ? aulaObj.diasActivos : hNivel.diasActivos;
-      return { nivel, horaIngreso, horaSalida, diasActivos, codigoSede: sedeCode };
+    function resolverHorarioAula(aulaObj, sedeCode) {
+      if (aulaObj && aulaObj.horarioPersonalizado && aulaObj.horarioPersonalizado.horaIngreso && aulaObj.horarioPersonalizado.horaSalida) {
+        return {
+          origen: 'Aula',
+          nivel: aulaObj.nivel || getNivelDeGrado(aulaObj.grado),
+          horaIngreso: aulaObj.horarioPersonalizado.horaIngreso,
+          horaSalida: aulaObj.horarioPersonalizado.horaSalida,
+          diasActivos: aulaObj.horarioPersonalizado.diasActivos || 'Lunes a Viernes'
+        };
+      }
+      const nivel = (aulaObj && aulaObj.nivel) || getNivelDeGrado(aulaObj && aulaObj.grado);
+      const hn = getHorarioDeNivel(nivel);
+      return {
+        origen: `Nivel (${nivel})`,
+        nivel,
+        horaIngreso: hn.horaIngreso,
+        horaSalida: hn.horaSalida,
+        diasActivos: hn.diasActivos || 'Lunes a Viernes'
+      };
     }
 
     function buildDefaultAulasPermanentes() {
-      const defNiv = buildDefaultHorariosPorNivel();
       return [
-        { idAula: 'AUL-S01-1', codigoSede: 'S01', nombreAula: 'Aula 101', grado: '3° Grado A', nivel: 'Primaria', horaIngreso: defNiv.Primaria.horaIngreso, horaSalida: defNiv.Primaria.horaSalida, diasActivos: defNiv.Primaria.diasActivos },
-        { idAula: 'AUL-S01-2', codigoSede: 'S01', nombreAula: 'Aula 104', grado: '4° Grado B', nivel: 'Primaria', horaIngreso: defNiv.Primaria.horaIngreso, horaSalida: defNiv.Primaria.horaSalida, diasActivos: defNiv.Primaria.diasActivos },
-        { idAula: 'AUL-S01-3', codigoSede: 'S01', nombreAula: 'Aula I-02', grado: 'Inicial 5 Años', nivel: 'Inicial', horaIngreso: defNiv.Inicial.horaIngreso, horaSalida: defNiv.Inicial.horaSalida, diasActivos: defNiv.Inicial.diasActivos },
-        { idAula: 'AUL-S02-1', codigoSede: 'S02', nombreAula: 'Aula 202', grado: '2° Grado A', nivel: 'Primaria', horaIngreso: defNiv.Primaria.horaIngreso, horaSalida: defNiv.Primaria.horaSalida, diasActivos: defNiv.Primaria.diasActivos },
-        { idAula: 'AUL-S03-1', codigoSede: 'S03', nombreAula: 'Aula 305', grado: '5° Grado A', nivel: 'Primaria', horaIngreso: defNiv.Primaria.horaIngreso, horaSalida: defNiv.Primaria.horaSalida, diasActivos: defNiv.Primaria.diasActivos }
+        { idAula: 'AUL-S01-1', codigoSede: 'S01', nombreAula: 'Aula 101', grado: '3° Grado A' },
+        { idAula: 'AUL-S01-2', codigoSede: 'S01', nombreAula: 'Aula 104', grado: '4° Grado B' },
+        { idAula: 'AUL-S01-3', codigoSede: 'S01', nombreAula: 'Aula I-02', grado: 'Inicial 5 Años' },
+        { idAula: 'AUL-S02-1', codigoSede: 'S02', nombreAula: 'Aula 202', grado: '2° Grado A' },
+        { idAula: 'AUL-S03-1', codigoSede: 'S03', nombreAula: 'Aula 305', grado: '5° Grado A' }
       ];
     }
 
@@ -579,13 +587,10 @@
       const hEl = document.getElementById('horarioOperativoBadge');
       if (fEl) fEl.textContent = `Día: ${appState.fechaOperativa}`;
       if (hEl) {
-        if (currentUser && currentUser.perfil !== 'ADMINISTRADOR' && currentUser.codigoSede !== 'TODAS') {
-          const hs = getHorarioDeSede(currentUser.codigoSede);
-          hEl.textContent = `Horario (${hs.codigoSede}): ${hs.horaInicioSalida} - ${hs.horaFinSalida}`;
-        } else {
-          const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
-          hEl.textContent = `Horario Base: ${hg.horaInicioSalida} - ${hg.horaFinSalida}`;
-        }
+        const hn = appState.horariosPorNivel || buildDefaultHorariosPorNivel();
+        const ini = hn.Inicial || { horaIngreso: '08:30', horaSalida: '13:30' };
+        const pri = hn.Primaria || { horaIngreso: '07:45', horaSalida: '13:50' };
+        hEl.textContent = `Inicial ${ini.horaIngreso}-${ini.horaSalida} | Primaria ${pri.horaIngreso}-${pri.horaSalida}`;
       }
     }
 
@@ -600,18 +605,6 @@
     function getActiveSedeCode() {
       if (!currentUser) return SEDES_Y_GRADOS[0].codigoSede;
       return currentUser.perfil === 'ADMINISTRADOR' ? selectedSedeForAdmin : currentUser.codigoSede;
-    }
-
-    function getHorarioAulaBadgeHtml(aulaNombre, sedeCode) {
-      const au = appState.tbl_aulas_permanentes.find(
-        x => x.codigoSede === sedeCode && x.nombreAula === aulaNombre
-      );
-      const ha = getHorarioParaAula(au, sedeCode);
-      const badgeStyle = ha.nivel === 'Inicial'
-        ? 'bg-amber-100 text-amber-900'
-        : 'bg-blue-100 text-blue-900';
-      return `<div class="font-semibold text-blue-800">${aulaNombre}</div>
-              <div class="mt-0.5"><span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold ${badgeStyle}">${ha.nivel}: ${ha.horaIngreso} - ${ha.horaSalida}</span></div>`;
     }
 
     function getAulasPermanentesDeSede(sedeCode) {
@@ -707,20 +700,19 @@
       if (perfil === 'TUTOR_PUERTA') {
         return [
           { id: 'tutorFlow', label: 'Flujo Puerta y Procesos (Sede)' },
-          { id: 'horarioGlobal', label: 'Configuración de Horarios (Aulas y Niveles)' }
+          { id: 'horarioGlobal', label: 'Horarios Nivel y Aulas (Sede)' }
         ];
       }
       if (perfil === 'TUTOR_AULA') {
         return [
           { id: 'aulaModule', label: 'Módulo Tutor de Aula (Sede)' },
-          { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Sede)' },
-          { id: 'horarioGlobal', label: 'Configuración de Horarios (Aulas y Niveles)' }
+          { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Sede)' }
         ];
       }
       return [
         { id: 'cargaAlumnos', label: 'Carga de Alumnos y Aulas (Por Sede)' },
         { id: 'processBySede', label: 'Tabla de Procesos (Por Sede)' },
-        { id: 'horarioGlobal', label: 'Configuración de Horarios (Aulas y Niveles)' }
+        { id: 'horarioGlobal', label: 'Horario Global (Todas las Sedes)' }
       ];
     }
 
@@ -915,70 +907,61 @@
               <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">${aulasSede.length} aula(s) permanente(s)</span>
             </div>
 
-            ${(() => {
-              const nivelFormDefault = aulaEnEdicion
-                ? (aulaEnEdicion.nivel || detectNivelFromGrado(aulaEnEdicion.grado))
-                : 'Primaria';
-              const hFormDefault = getHorarioParaAula(aulaEnEdicion || { nivel: nivelFormDefault }, sedeCode);
-              return `
-                <form id="aulaSedeForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div>
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Nombre del Aula</label>
-                    <input id="inpNombreAula" type="text" required value="${aulaEnEdicion ? aulaEnEdicion.nombreAula : ''}"
-                      placeholder="Ej. Aula 102"
-                      class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs" />
-                  </div>
-                  <div>
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Grado Asociado</label>
-                    <select id="inpGradoAula" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
-                      <option value="">— General / Sin grado fijo —</option>
-                      ${sedeCfg.grados.map(g => `<option value="${g}" ${aulaEnEdicion && aulaEnEdicion.grado === g ? 'selected' : ''}>${g}</option>`).join('')}
-                    </select>
-                  </div>
-                  <div>
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Nivel</label>
-                    <select id="inpNivelAula" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
-                      <option value="Inicial" ${nivelFormDefault === 'Inicial' ? 'selected' : ''}>Inicial (08:30 - 13:30)</option>
-                      <option value="Primaria" ${nivelFormDefault === 'Primaria' ? 'selected' : ''}>Primaria (07:45 - 13:50)</option>
-                    </select>
-                  </div>
-                  <div class="grid grid-cols-2 gap-1.5">
-                    <div>
-                      <label class="block text-[11px] font-bold text-slate-700 mb-1">Ingreso</label>
-                      <input id="inpHoraIngresoAula" type="time" required value="${hFormDefault.horaIngreso}"
-                        class="w-full px-2 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
-                    </div>
-                    <div>
-                      <label class="block text-[11px] font-bold text-slate-700 mb-1">Salida</label>
-                      <input id="inpHoraSalidaAula" type="time" required value="${hFormDefault.horaSalida}"
-                        class="w-full px-2 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
-                    </div>
-                  </div>
-                  <div class="flex items-end gap-2">
-                    <button type="submit" class="flex-1 py-2 px-3 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow">
-                      ${aulaEnEdicion ? 'Actualizar Aula' : 'Crear Aula'}
-                    </button>
-                    ${aulaEnEdicion ? `
-                      <button id="cancelEditAulaBtn" type="button" class="py-2 px-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold">
-                        Cancelar
-                      </button>
-                    ` : ''}
-                  </div>
-                </form>
-              `;
-            })()}
+            <form id="aulaSedeForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4 p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Nombre del Aula</label>
+                <input id="inpNombreAula" type="text" required value="${aulaEnEdicion ? aulaEnEdicion.nombreAula : ''}"
+                  placeholder="Ej. Aula 102"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Nivel</label>
+                <select id="inpNivelAula" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
+                  <option value="Inicial" ${(aulaEnEdicion && (aulaEnEdicion.nivel === 'Inicial' || getNivelDeGrado(aulaEnEdicion.grado) === 'Inicial')) ? 'selected' : ''}>Inicial</option>
+                  <option value="Primaria" ${(!aulaEnEdicion || (aulaEnEdicion.nivel !== 'Inicial' && getNivelDeGrado(aulaEnEdicion.grado) === 'Primaria')) ? 'selected' : ''}>Primaria</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Grado Asociado</label>
+                <select id="inpGradoAula" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
+                  <option value="">— General / Sin grado fijo —</option>
+                  ${sedeCfg.grados.map(g => `<option value="${g}" ${aulaEnEdicion && aulaEnEdicion.grado === g ? 'selected' : ''}>${g}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Ingreso Aula (opcional)</label>
+                <input id="inpIngresoAula" type="time"
+                  value="${aulaEnEdicion && aulaEnEdicion.horarioPersonalizado ? aulaEnEdicion.horarioPersonalizado.horaIngreso : ''}"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Salida Aula (opcional)</label>
+                <input id="inpSalidaAula" type="time"
+                  value="${aulaEnEdicion && aulaEnEdicion.horarioPersonalizado ? aulaEnEdicion.horarioPersonalizado.horaSalida : ''}"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
+              </div>
+              <div class="flex items-end gap-2">
+                <button type="submit" class="flex-1 py-2 px-3 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow">
+                  ${aulaEnEdicion ? 'Actualizar' : 'Crear Aula'}
+                </button>
+                ${aulaEnEdicion ? `
+                  <button id="cancelEditAulaBtn" type="button" class="py-2 px-3 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold">
+                    Cancelar
+                  </button>
+                ` : ''}
+              </div>
+            </form>
 
             <div class="flex flex-wrap gap-2">
               ${aulasSede.length ? aulasSede.map(au => {
-                const ha = getHorarioParaAula(au, sedeCode);
+                const horAula = resolverHorarioAula(au, sedeCode);
                 return `
                   <div class="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs shadow-2xs">
                     <div>
                       <span class="font-bold text-slate-900">${au.nombreAula}</span>
+                      <span class="text-[11px] font-semibold text-indigo-700 ml-1">[${horAula.nivel}]</span>
                       ${au.grado ? `<span class="text-[11px] text-slate-500 ml-1">(${au.grado})</span>` : ''}
-                      <span class="ml-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${ha.nivel === 'Inicial' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
-                        ${ha.nivel}: ${ha.horaIngreso} - ${ha.horaSalida}
-                      </span>
+                      <span class="block text-[10px] font-mono text-emerald-800">Ingreso ${horAula.horaIngreso} &bull; Salida ${horAula.horaSalida} (${horAula.origen})</span>
                     </div>
                     <button type="button" data-edit-aula="${au.idAula}"
                       class="px-2 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px]">
@@ -1092,57 +1075,34 @@
 
       bindAdminSedeSelector(container);
 
-      const nivelAulaSel = document.getElementById('inpNivelAula');
-      const gradoAulaSel = document.getElementById('inpGradoAula');
-      const horaIngresoAulaInp = document.getElementById('inpHoraIngresoAula');
-      const horaSalidaAulaInp = document.getElementById('inpHoraSalidaAula');
-
-      if (nivelAulaSel && horaIngresoAulaInp && horaSalidaAulaInp) {
-        nivelAulaSel.addEventListener('change', () => {
-          const hNiv = getHorarioPorNivel(nivelAulaSel.value);
-          horaIngresoAulaInp.value = hNiv.horaIngreso;
-          horaSalidaAulaInp.value = hNiv.horaSalida;
-        });
-      }
-      if (gradoAulaSel && nivelAulaSel && horaIngresoAulaInp && horaSalidaAulaInp && !editingAulaId) {
-        gradoAulaSel.addEventListener('change', () => {
-          if (!gradoAulaSel.value) return;
-          const detNiv = detectNivelFromGrado(gradoAulaSel.value);
-          nivelAulaSel.value = detNiv;
-          const hNiv = getHorarioPorNivel(detNiv);
-          horaIngresoAulaInp.value = hNiv.horaIngreso;
-          horaSalidaAulaInp.value = hNiv.horaSalida;
-        });
-      }
-
       document.getElementById('aulaSedeForm').addEventListener('submit', e => {
         e.preventDefault();
         const nombreAula = document.getElementById('inpNombreAula').value.trim();
         const grado = document.getElementById('inpGradoAula').value;
-        const nivel = document.getElementById('inpNivelAula').value || detectNivelFromGrado(grado);
-        const hDef = getHorarioPorNivel(nivel);
-        const horaIngreso = document.getElementById('inpHoraIngresoAula').value || hDef.horaIngreso;
-        const horaSalida = document.getElementById('inpHoraSalidaAula').value || hDef.horaSalida;
         if (!nombreAula) return;
+
+        const nivelSeleccionado = document.getElementById('inpNivelAula').value || getNivelDeGrado(grado);
+        const ingAula = document.getElementById('inpIngresoAula').value;
+        const salAula = document.getElementById('inpSalidaAula').value;
+        const horarioPersonalizado = (ingAula && salAula)
+          ? { horaIngreso: ingAula, horaSalida: salAula, diasActivos: 'Lunes a Viernes' }
+          : null;
 
         if (editingAulaId) {
           const aulaObj = appState.tbl_aulas_permanentes.find(x => x.idAula === editingAulaId && x.codigoSede === sedeCode);
           if (aulaObj) {
             const anteriorNombre = aulaObj.nombreAula;
             aulaObj.nombreAula = nombreAula;
+            aulaObj.nivel = nivelSeleccionado;
             aulaObj.grado = grado;
-            aulaObj.nivel = nivel;
-            aulaObj.horaIngreso = horaIngreso;
-            aulaObj.horaSalida = horaSalida;
-            aulaObj.diasActivos = hDef.diasActivos;
+            aulaObj.horarioPersonalizado = horarioPersonalizado;
             appState.tbl_alumnos.forEach(al => {
               if (al.codigoSede === sedeCode && al.aula === anteriorNombre) {
                 al.aula = nombreAula;
-                if (grado) al.grado = grado;
               }
             });
             syncTableEvent('UPDATE_AULA_PERMANENTE', { aula: aulaObj });
-            showToast(`Aula permanente actualizada: ${nombreAula} (${nivel} ${horaIngreso} - ${horaSalida}).`);
+            showToast(`Aula permanente actualizada a "${nombreAula}" (${nivelSeleccionado}).`);
           }
           editingAulaId = null;
         } else {
@@ -1150,15 +1110,13 @@
             idAula: `AUL-${sedeCode}-${Date.now().toString().slice(-4)}`,
             codigoSede: sedeCode,
             nombreAula,
+            nivel: nivelSeleccionado,
             grado,
-            nivel,
-            horaIngreso,
-            horaSalida,
-            diasActivos: hDef.diasActivos
+            horarioPersonalizado
           };
           appState.tbl_aulas_permanentes.push(nuevaAula);
           syncTableEvent('CREATE_AULA_PERMANENTE', { aula: nuevaAula });
-          showToast(`Aula permanente "${nombreAula}" creada (${nivel}: ${horaIngreso} - ${horaSalida}).`);
+          showToast(`Aula permanente "${nombreAula}" creada en ${sedeCfg.nombreSede} (${nivelSeleccionado}).`);
         }
 
         saveState();
@@ -1457,7 +1415,7 @@
                         </td>
                         <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
                         <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
-                        <td class="px-3 py-2.5">${getHorarioAulaBadgeHtml(a.aula, a.codigoSede)}</td>
+                        <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
                         <td class="px-3 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
                         <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo, a.alarmaActiva)}</td>
                         <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaNotifAula}</td>
@@ -1610,7 +1568,7 @@
                   <div class="bg-white rounded-xl border border-rose-300 p-3 flex items-center justify-between gap-2 shadow-2xs">
                     <div>
                       <p class="text-xs font-extrabold text-slate-900">${x.nombreAlumno}</p>
-                      <p class="text-[11px] text-slate-600">${x.grado} &bull; <span class="font-bold text-blue-800">${x.aula}</span> <span class="font-mono text-[10px] text-slate-500">(${getHorarioParaAula(appState.tbl_aulas_permanentes.find(au => au.codigoSede === x.codigoSede && au.nombreAula === x.aula), x.codigoSede).horaIngreso}-${getHorarioParaAula(appState.tbl_aulas_permanentes.find(au => au.codigoSede === x.codigoSede && au.nombreAula === x.aula), x.codigoSede).horaSalida})</span> &bull; Notif: <span class="font-mono">${x.horaNotifAula}</span></p>
+                      <p class="text-[11px] text-slate-600">${x.grado} &bull; <span class="font-bold text-blue-800">${x.aula}</span> &bull; Notif: <span class="font-mono">${x.horaNotifAula}</span></p>
                     </div>
                     <button type="button" data-ir-puerta="${x.codigoAlumno}"
                       class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold whitespace-nowrap">
@@ -1645,7 +1603,7 @@
                     <tr class="${a.alarmaActiva ? 'bg-rose-50/80' : ''}">
                       <td class="px-3 py-2.5 font-bold text-slate-900">${a.nombreAlumno}</td>
                       <td class="px-3 py-2.5 text-slate-700">${a.grado}</td>
-                      <td class="px-3 py-2.5">${getHorarioAulaBadgeHtml(a.aula, a.codigoSede)}</td>
+                      <td class="px-3 py-2.5 font-semibold text-blue-800">${a.aula}</td>
                       <td class="px-3 py-2.5">${getAsistenciaBadge(a.asistencia)}</td>
                       <td class="px-3 py-2.5">${getEtapaBadge(a.etapaFlujo, a.alarmaActiva)}</td>
                       <td class="px-3 py-2.5 font-mono text-slate-600">${a.horaNotifAula}</td>
@@ -1760,10 +1718,9 @@
     }
 
     // =========================================================================
-    // 7. CONFIGURACIÓN DE HORARIOS: INICIAL, PRIMARIA Y ASIGNACIÓN A AULAS / SEDES
+    // 7. CONFIGURACIÓN DE HORARIOS (INICIAL, PRIMARIA Y ASIGNACIÓN A AULAS)
     // =========================================================================
     let selectedSedeHorarioEdit = SEDES_Y_GRADOS[0].codigoSede;
-    let selectedAulaHorarioId = null;
 
     function eliminarHorarioDeSede(codigoSede) {
       const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
@@ -1787,524 +1744,279 @@
     }
 
     function renderHorarioGlobalAdmin(container) {
-      if (currentUser && currentUser.perfil !== 'ADMINISTRADOR' && currentUser.codigoSede !== 'TODAS') {
-        selectedSedeHorarioEdit = currentUser.codigoSede;
-      }
+      const esTutorPuerta = currentUser && currentUser.perfil === 'TUTOR_PUERTA';
+      const sedeActivaCode = esTutorPuerta ? currentUser.codigoSede : selectedSedeHorarioEdit;
+      const sedeEdit = getSedeConfig(sedeActivaCode);
 
-      const hInicial = getHorarioPorNivel('Inicial');
-      const hPrimaria = getHorarioPorNivel('Primaria');
-      const hg = appState.horarioGlobal || buildDefaultHorarioGlobal();
-      if (!appState.horariosPorSede) {
-        appState.horariosPorSede = buildDefaultHorariosPorSede(hg);
+      if (!appState.horariosPorNivel) {
+        appState.horariosPorNivel = buildDefaultHorariosPorNivel();
       }
-
-      const sedeEdit = getSedeConfig(selectedSedeHorarioEdit);
-      const horarioSedeActual = getHorarioDeSede(selectedSedeHorarioEdit);
-      const aulasSedeEdit = getAulasPermanentesDeSede(selectedSedeHorarioEdit);
-      const aulaSeleccionada = aulasSedeEdit.find(a => a.idAula === selectedAulaHorarioId) || aulasSedeEdit[0] || null;
-      if (aulaSeleccionada) {
-        selectedAulaHorarioId = aulaSeleccionada.idAula;
-      }
-      const horarioAulaActual = getHorarioParaAula(aulaSeleccionada, selectedSedeHorarioEdit);
+      const hInicial = getHorarioDeNivel('Inicial');
+      const hPrimaria = getHorarioDeNivel('Primaria');
+      const aulasSede = getAulasPermanentesDeSede(sedeActivaCode);
 
       container.innerHTML = `
         <div class="space-y-6 fade-in">
-          <!-- 1) CONFIGURACIÓN BASE POR NIVEL: INICIAL (08:30 - 13:30) Y PRIMARIA (07:45 - 13:50) -->
-          <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <div>
-                <h2 class="text-base font-extrabold text-slate-900">Configuración de Horarios por Nivel (Inicial y Primaria)</h2>
-                <p class="text-xs text-slate-500">Configure ambos casos de ingreso y salida y aplíquelos a las aulas correspondientes.</p>
+          <!-- HORARIOS POR NIVEL: INICIAL (8:30 - 13:30) Y PRIMARIA (7:45 - 13:50) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div>
+                  <h2 class="text-sm font-extrabold text-slate-900">Horario Nivel Inicial</h2>
+                  <p class="text-xs text-slate-500">Por defecto: Ingreso <strong>08:30</strong> &bull; Salida <strong>13:30</strong></p>
+                </div>
+                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900">Inicial</span>
               </div>
-              <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-800">Inicial y Primaria</span>
+              <form id="horarioInicialForm" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora Ingreso</label>
+                  <input id="inpIniIngreso" type="time" required value="${hInicial.horaIngreso}"
+                    class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora Salida</label>
+                  <input id="inpIniSalida" type="time" required value="${hInicial.horaSalida}"
+                    class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
+                </div>
+                <div class="flex items-end">
+                  <button type="submit" class="w-full py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow">
+                    Guardar Inicial
+                  </button>
+                </div>
+              </form>
             </div>
 
-            <form id="horariosNivelesForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <!-- INICIAL -->
-              <div class="p-4 rounded-xl border border-amber-200 bg-amber-50/50 space-y-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-extrabold uppercase tracking-wider text-amber-900">Nivel Inicial</span>
-                  <span class="text-[11px] font-mono font-bold text-amber-800">Base: 08:30 — 13:30</span>
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <div>
+                  <h2 class="text-sm font-extrabold text-slate-900">Horario Nivel Primaria</h2>
+                  <p class="text-xs text-slate-500">Por defecto: Ingreso <strong>07:45</strong> &bull; Salida <strong>13:50</strong></p>
                 </div>
-                <div class="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora de Ingreso</label>
-                    <input id="inpInicialIngreso" type="time" required value="${hInicial.horaIngreso}"
-                      class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
-                  </div>
-                  <div>
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora de Salida</label>
-                    <input id="inpInicialSalida" type="time" required value="${hInicial.horaSalida}"
-                      class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
-                  </div>
+                <span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-100 text-blue-900">Primaria</span>
+              </div>
+              <form id="horarioPrimariaForm" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora Ingreso</label>
+                  <input id="inpPriIngreso" type="time" required value="${hPrimaria.horaIngreso}"
+                    class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
                 </div>
                 <div>
-                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Días Aplicables (Inicial)</label>
-                  <input id="inpInicialDias" type="text" required value="${hInicial.diasActivos}"
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs" />
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora Salida</label>
+                  <input id="inpPriSalida" type="time" required value="${hPrimaria.horaSalida}"
+                    class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
                 </div>
-                <button id="btnAplicarNivelInicialAulas" type="button"
-                  class="w-full py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow transition">
-                  Guardar y Asignar a Aulas de Inicial
-                </button>
-              </div>
+                <div class="flex items-end">
+                  <button type="submit" class="w-full py-2 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow">
+                    Guardar Primaria
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
 
-              <!-- PRIMARIA -->
-              <div class="p-4 rounded-xl border border-blue-200 bg-blue-50/50 space-y-3">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-extrabold uppercase tracking-wider text-blue-900">Nivel Primaria</span>
-                  <span class="text-[11px] font-mono font-bold text-blue-800">Base: 07:45 — 13:50</span>
-                </div>
-                <div class="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora de Ingreso</label>
-                    <input id="inpPrimariaIngreso" type="time" required value="${hPrimaria.horaIngreso}"
-                      class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
-                  </div>
-                  <div>
-                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora de Salida</label>
-                    <input id="inpPrimariaSalida" type="time" required value="${hPrimaria.horaSalida}"
-                      class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
-                  </div>
-                </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Días Aplicables (Primaria)</label>
-                  <input id="inpPrimariaDias" type="text" required value="${hPrimaria.diasActivos}"
-                    class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs" />
-                </div>
-                <button id="btnAplicarNivelPrimariaAulas" type="button"
-                  class="w-full py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
-                  Guardar y Asignar a Aulas de Primaria
-                </button>
+          <!-- ASIGNACIÓN DE HORARIO A AULAS -->
+          <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 class="text-base font-extrabold text-slate-900">Asignar Horario a Aulas — ${sedeEdit.nombreSede}</h3>
+                <p class="text-xs text-slate-500">Asigne el horario de Inicial, Primaria o un horario personalizado a cada aula y aplíquelo con un clic.</p>
               </div>
+              ${!esTutorPuerta ? `
+                <select id="selSedeAulasHorario"
+                  class="px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-900">
+                  ${SEDES_Y_GRADOS.map(s => `<option value="${s.codigoSede}" ${s.codigoSede === sedeActivaCode ? 'selected' : ''}>${s.nombreSede}</option>`).join('')}
+                </select>
+              ` : ''}
+            </div>
 
-              <div class="md:col-span-2 flex justify-end">
-                <button type="submit" class="py-2.5 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow transition">
-                  Guardar Ambos Niveles (Inicial y Primaria)
+            <form id="asignarHorarioAulaForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-5 p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Aula</label>
+                <select id="selAulaAsignarHorario" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
+                  ${aulasSede.length
+                    ? aulasSede.map(a => `<option value="${a.idAula}">${a.nombreAula}${a.grado ? ` (${a.grado})` : ''}</option>`).join('')
+                    : `<option value="">Sin aulas en sede</option>`}
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Plantilla / Nivel</label>
+                <select id="selPlantillaHorarioAula" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
+                  <option value="Inicial">Inicial (${hInicial.horaIngreso} - ${hInicial.horaSalida})</option>
+                  <option value="Primaria">Primaria (${hPrimaria.horaIngreso} - ${hPrimaria.horaSalida})</option>
+                  <option value="Personalizado">Personalizado</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora Ingreso</label>
+                <input id="inpAsigIngreso" type="time" required value="${hInicial.horaIngreso}"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-700 mb-1">Hora Salida</label>
+                <input id="inpAsigSalida" type="time" required value="${hInicial.horaSalida}"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-mono" />
+              </div>
+              <div class="flex items-end">
+                <button type="submit" class="w-full py-2 px-3 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow">
+                  Asignar a Aula
                 </button>
               </div>
             </form>
-          </div>
 
-          <!-- 2) ASIGNAR HORARIO A AULAS Y CONFIGURAR POR SEDE -->
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="space-y-6 h-fit">
-              <!-- ASIGNAR HORARIO A AULA ESPECÍFICA O CREAR AULA CON HORARIO -->
-              <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-                <div>
-                  <h3 class="text-base font-extrabold text-slate-900 mb-1">Asignar Horario a Aulas</h3>
-                  <p class="text-xs text-slate-500">Elija una sede y un aula (o cree una nueva) para asignar su ingreso y salida.</p>
-                </div>
-
-                <form id="asignarHorarioAulaForm" class="space-y-3">
-                  ${currentUser.perfil === 'ADMINISTRADOR' ? `
-                    <div>
-                      <label class="block text-xs font-bold text-slate-700 mb-1">Sede</label>
-                      <select id="selHorarioSede"
-                        class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-900">
-                        ${SEDES_Y_GRADOS.map(s => `<option value="${s.codigoSede}" ${s.codigoSede === selectedSedeHorarioEdit ? 'selected' : ''}>${s.nombreSede}</option>`).join('')}
-                      </select>
-                    </div>
-                  ` : `
-                    <div class="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-800">
-                      Sede: ${sedeEdit.nombreSede}
-                    </div>
+            <div class="overflow-x-auto border border-slate-200 rounded-xl">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th class="px-3 py-2.5">Aula</th>
+                    <th class="px-3 py-2.5">Nivel</th>
+                    <th class="px-3 py-2.5">Grado</th>
+                    <th class="px-3 py-2.5">Ingreso</th>
+                    <th class="px-3 py-2.5">Salida</th>
+                    <th class="px-3 py-2.5">Origen</th>
+                    <th class="px-3 py-2.5 text-right">Asignación Rápida</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${aulasSede.length ? aulasSede.map(au => {
+                    const res = resolverHorarioAula(au, sedeActivaCode);
+                    return `
+                      <tr>
+                        <td class="px-3 py-2.5 font-bold text-slate-900">${au.nombreAula}</td>
+                        <td class="px-3 py-2.5 font-semibold text-indigo-800">${res.nivel}</td>
+                        <td class="px-3 py-2.5 text-slate-700">${au.grado || '—'}</td>
+                        <td class="px-3 py-2.5 font-mono font-bold text-emerald-800">${res.horaIngreso}</td>
+                        <td class="px-3 py-2.5 font-mono font-bold text-emerald-800">${res.horaSalida}</td>
+                        <td class="px-3 py-2.5 text-slate-500">${res.origen}</td>
+                        <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
+                          <button type="button" data-quick-nivel-aula="${au.idAula}" data-nivel="Inicial"
+                            class="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px]">
+                            Usar Inicial
+                          </button>
+                          <button type="button" data-quick-nivel-aula="${au.idAula}" data-nivel="Primaria"
+                            class="px-2 py-1 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-900 font-bold text-[11px]">
+                            Usar Primaria
+                          </button>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('') : `
+                    <tr>
+                      <td colspan="7" class="px-4 py-6 text-center text-slate-400">No hay aulas permanentes creadas en ${sedeEdit.nombreSede}.</td>
+                    </tr>
                   `}
-
-                  <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Aula</label>
-                    <select id="selAulaHorario"
-                      class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-900">
-                      ${aulasSedeEdit.length
-                        ? aulasSedeEdit.map(au => `<option value="${au.idAula}" ${aulaSeleccionada && aulaSeleccionada.idAula === au.idAula ? 'selected' : ''}>${au.nombreAula} ${au.grado ? `(${au.grado})` : ''}</option>`).join('')
-                        : `<option value="">— Sin aulas creadas en esta sede —</option>`}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Nivel del Aula</label>
-                    <select id="selNivelAulaHorario"
-                      class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold">
-                      <option value="Inicial" ${horarioAulaActual.nivel === 'Inicial' ? 'selected' : ''}>Inicial</option>
-                      <option value="Primaria" ${horarioAulaActual.nivel === 'Primaria' ? 'selected' : ''}>Primaria</option>
-                    </select>
-                  </div>
-
-                  <div class="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label class="block text-xs font-bold text-slate-700 mb-1">Ingreso</label>
-                      <input id="inpAulaHorarioIngreso" type="time" required value="${horarioAulaActual.horaIngreso}"
-                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
-                    </div>
-                    <div>
-                      <label class="block text-xs font-bold text-slate-700 mb-1">Salida</label>
-                      <input id="inpAulaHorarioSalida" type="time" required value="${horarioAulaActual.horaSalida}"
-                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
-                    </div>
-                  </div>
-
-                  <div class="flex flex-wrap gap-2 pt-1">
-                    <button type="submit" class="flex-1 py-2.5 px-3 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow transition">
-                      Asignar a Aula
-                    </button>
-                    <button id="btnCargarBaseNivelAula" type="button"
-                      class="py-2.5 px-3 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition">
-                      Usar Base Nivel
-                    </button>
-                  </div>
-                </form>
-
-                <hr class="border-slate-200" />
-
-                <!-- CREAR AULA RÁPIDA CON HORARIO ASIGNADO -->
-                <form id="crearAulaConHorarioForm" class="space-y-3">
-                  <p class="text-xs font-extrabold text-slate-900">Crear Nueva Aula y Asignar Horario</p>
-                  <div class="grid grid-cols-2 gap-2">
-                    <input id="inpNuevaAulaRapidaNombre" type="text" required placeholder="Ej. Aula 105"
-                      class="px-3 py-2 rounded-lg border border-slate-300 text-xs" />
-                    <select id="inpNuevaAulaRapidaNivel"
-                      class="px-2.5 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold">
-                      <option value="Inicial">Inicial</option>
-                      <option value="Primaria" selected>Primaria</option>
-                    </select>
-                  </div>
-                  <button type="submit" class="w-full py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow transition">
-                    Crear Aula con Horario de su Nivel
-                  </button>
-                </form>
-              </div>
-
-              <!-- CONFIGURAR / EDITAR HORARIO POR SEDE -->
-              <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4">
-                <div>
-                  <h3 class="text-base font-extrabold text-slate-900 mb-1">Horario de Sede — ${sedeEdit.nombreSede}</h3>
-                  <p class="text-xs text-slate-500">Edite, actualice o elimine el horario resumen de la sede.</p>
-                </div>
-
-                <form id="horarioSedeForm" class="space-y-3">
-                  <div class="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label class="block text-xs font-bold text-slate-700 mb-1">Hora de Inicio</label>
-                      <input id="inpSedeHoraInicio" type="time" required
-                        value="${horarioSedeActual.horaInicioSalida && horarioSedeActual.horaInicioSalida !== '—' ? horarioSedeActual.horaInicioSalida : hg.horaInicioSalida}"
-                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
-                    </div>
-                    <div>
-                      <label class="block text-xs font-bold text-slate-700 mb-1">Hora de Término</label>
-                      <input id="inpSedeHoraFin" type="time" required
-                        value="${horarioSedeActual.horaFinSalida && horarioSedeActual.horaFinSalida !== '—' ? horarioSedeActual.horaFinSalida : hg.horaFinSalida}"
-                        class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono" />
-                    </div>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">Días Aplicables</label>
-                    <input id="inpSedeDiasActivos" type="text" required
-                      value="${horarioSedeActual.diasActivos && horarioSedeActual.diasActivos !== 'Sin horario asignado' ? horarioSedeActual.diasActivos : hg.diasActivos}"
-                      class="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs" />
-                  </div>
-                  <div class="flex items-center gap-2 pt-1">
-                    <button type="submit" class="flex-1 py-2 px-3 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow transition">
-                      Actualizar Sede
-                    </button>
-                    <button id="btnEliminarHorarioSedeActual" type="button"
-                      class="py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow transition">
-                      Eliminar
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-
-            <!-- TABLA DE AULAS Y SUS HORARIOS ASIGNADOS (EN LA SEDE SELECCIONADA) + SEDES -->
-            <div class="lg:col-span-2 space-y-6">
-              <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <div>
-                    <h3 class="text-base font-extrabold text-slate-900">Horarios Asignados a Aulas — ${sedeEdit.nombreSede}</h3>
-                    <p class="text-xs text-slate-500">Cada aula muestra su nivel y horario asignado (Ingreso y Salida) y puede editarse en un clic.</p>
-                  </div>
-                  <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800">${aulasSedeEdit.length} aula(s)</span>
-                </div>
-
-                <div class="overflow-x-auto border border-slate-200 rounded-xl">
-                  <table class="w-full text-left text-xs">
-                    <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-                      <tr>
-                        <th class="px-3 py-2.5">Aula</th>
-                        <th class="px-3 py-2.5">Grado</th>
-                        <th class="px-3 py-2.5">Nivel</th>
-                        <th class="px-3 py-2.5">Ingreso</th>
-                        <th class="px-3 py-2.5">Salida</th>
-                        <th class="px-3 py-2.5 text-right">Asignar / Editar</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                      ${aulasSedeEdit.length ? aulasSedeEdit.map(au => {
-                        const ha = getHorarioParaAula(au, sedeEdit.codigoSede);
-                        const isSel = aulaSeleccionada && aulaSeleccionada.idAula === au.idAula;
-                        return `
-                          <tr class="${isSel ? 'bg-indigo-50/70' : ''}">
-                            <td class="px-3 py-2.5 font-bold text-slate-900">${au.nombreAula}</td>
-                            <td class="px-3 py-2.5 text-slate-600">${au.grado || '—'}</td>
-                            <td class="px-3 py-2.5">
-                              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${ha.nivel === 'Inicial' ? 'bg-amber-100 text-amber-900' : 'bg-blue-100 text-blue-900'}">
-                                ${ha.nivel}
-                              </span>
-                            </td>
-                            <td class="px-3 py-2.5 font-mono font-bold text-slate-800">${ha.horaIngreso}</td>
-                            <td class="px-3 py-2.5 font-mono font-bold text-emerald-800">${ha.horaSalida}</td>
-                            <td class="px-3 py-2.5 text-right">
-                              <button type="button" data-pick-aula-horario="${au.idAula}"
-                                class="px-2.5 py-1 rounded-lg bg-indigo-100 hover:bg-indigo-200 text-indigo-900 font-bold text-[11px]">
-                                Configurar Aula
-                              </button>
-                            </td>
-                          </tr>
-                        `;
-                      }).join('') : `
-                        <tr>
-                          <td colspan="6" class="px-4 py-6 text-center text-slate-400">
-                            No hay aulas en esta sede. Cree una desde el formulario de la izquierda o en "Carga de Alumnos y Aulas".
-                          </td>
-                        </tr>
-                      `}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-                  <div>
-                    <h3 class="text-base font-extrabold text-slate-900">Horarios Configurados por Sede</h3>
-                    <p class="text-xs text-slate-500">Seleccione cualquier sede para revisar o editar su horario y sus aulas.</p>
-                  </div>
-                  <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">${SEDES_Y_GRADOS.length} sedes</span>
-                </div>
-
-                <div class="overflow-x-auto border border-slate-200 rounded-xl max-h-[360px] overflow-y-auto">
-                  <table class="w-full text-left text-xs">
-                    <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 sticky top-0">
-                      <tr>
-                        <th class="px-3 py-2.5">Sede</th>
-                        <th class="px-3 py-2.5">Horario</th>
-                        <th class="px-3 py-2.5">Días</th>
-                        <th class="px-3 py-2.5 text-right">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                      ${SEDES_Y_GRADOS.map(s => {
-                        const hs = getHorarioDeSede(s.codigoSede);
-                        const sinHorario = hs.horaInicioSalida === '—' || hs.horaFinSalida === '—';
-                        return `
-                          <tr class="${s.codigoSede === selectedSedeHorarioEdit ? 'bg-blue-50/60' : ''}">
-                            <td class="px-3 py-2.5 font-semibold text-slate-900">${s.nombreSede}</td>
-                            <td class="px-3 py-2.5 font-mono font-bold ${sinHorario ? 'text-slate-400' : 'text-emerald-800'}">
-                              ${sinHorario ? 'Sin horario' : `${hs.horaInicioSalida} - ${hs.horaFinSalida}`}
-                            </td>
-                            <td class="px-3 py-2.5 text-slate-600">${hs.diasActivos}</td>
-                            <td class="px-3 py-2.5 text-right space-x-1.5 whitespace-nowrap">
-                              <button type="button" data-edit-horario-sede="${s.codigoSede}"
-                                class="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px]">
-                                Editar
-                              </button>
-                              <button type="button" data-del-horario-sede="${s.codigoSede}"
-                                class="px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px]">
-                                Eliminar
-                              </button>
-                            </td>
-                          </tr>
-                        `;
-                      }).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
       `;
 
-      function leerNivelesDesdeForm() {
-        return {
-          Inicial: {
-            horaIngreso: document.getElementById('inpInicialIngreso').value || '08:30',
-            horaSalida: document.getElementById('inpInicialSalida').value || '13:30',
-            diasActivos: document.getElementById('inpInicialDias').value.trim() || 'Lunes a Viernes'
-          },
-          Primaria: {
-            horaIngreso: document.getElementById('inpPrimariaIngreso').value || '07:45',
-            horaSalida: document.getElementById('inpPrimariaSalida').value || '13:50',
-            diasActivos: document.getElementById('inpPrimariaDias').value.trim() || 'Lunes a Viernes'
-          }
-        };
-      }
-
-      function aplicarHorarioANivelEnAulas(nivelTarget, cfgNivel) {
-        appState.tbl_aulas_permanentes.forEach(au => {
-          const nivAula = au.nivel || detectNivelFromGrado(au.grado);
-          if (nivAula === nivelTarget) {
-            au.nivel = nivelTarget;
-            au.horaIngreso = cfgNivel.horaIngreso;
-            au.horaSalida = cfgNivel.horaSalida;
-            au.diasActivos = cfgNivel.diasActivos;
-          }
-        });
-      }
-
-      document.getElementById('horariosNivelesForm').addEventListener('submit', e => {
+      document.getElementById('horarioInicialForm').addEventListener('submit', e => {
         e.preventDefault();
-        appState.horariosPorNivel = leerNivelesDesdeForm();
+        const ing = document.getElementById('inpIniIngreso').value;
+        const sal = document.getElementById('inpIniSalida').value;
+        appState.horariosPorNivel.Inicial = {
+          nivel: 'Inicial',
+          horaIngreso: ing,
+          horaSalida: sal,
+          diasActivos: 'Lunes a Viernes',
+          actualizadoEn: getTodayISO()
+        };
         saveState();
-        syncTableEvent('UPDATE_HORARIOS_NIVELES', { horariosPorNivel: appState.horariosPorNivel });
+        updateHeaderBadges();
+        syncTableEvent('UPDATE_HORARIO_NIVEL', { horarioNivel: appState.horariosPorNivel.Inicial });
         renderCurrentTab();
-        showToast('Horarios base de Inicial y Primaria guardados.');
+        showToast(`Horario de Inicial actualizado (${ing} - ${sal}).`);
       });
 
-      document.getElementById('btnAplicarNivelInicialAulas').addEventListener('click', () => {
-        const vals = leerNivelesDesdeForm();
-        appState.horariosPorNivel = vals;
-        aplicarHorarioANivelEnAulas('Inicial', vals.Inicial);
+      document.getElementById('horarioPrimariaForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const ing = document.getElementById('inpPriIngreso').value;
+        const sal = document.getElementById('inpPriSalida').value;
+        appState.horariosPorNivel.Primaria = {
+          nivel: 'Primaria',
+          horaIngreso: ing,
+          horaSalida: sal,
+          diasActivos: 'Lunes a Viernes',
+          actualizadoEn: getTodayISO()
+        };
+        appState.horarioGlobal = {
+          horaInicioSalida: ing,
+          horaFinSalida: sal,
+          diasActivos: 'Lunes a Viernes',
+          actualizadoEn: getTodayISO()
+        };
         saveState();
-        syncTableEvent('APPLY_HORARIO_NIVEL_AULAS', { nivel: 'Inicial', horario: vals.Inicial });
+        updateHeaderBadges();
+        syncTableEvent('UPDATE_HORARIO_NIVEL', { horarioNivel: appState.horariosPorNivel.Primaria });
         renderCurrentTab();
-        showToast(`Horario Inicial (${vals.Inicial.horaIngreso} - ${vals.Inicial.horaSalida}) asignado a aulas de Inicial.`);
+        showToast(`Horario de Primaria actualizado (${ing} - ${sal}).`);
       });
 
-      document.getElementById('btnAplicarNivelPrimariaAulas').addEventListener('click', () => {
-        const vals = leerNivelesDesdeForm();
-        appState.horariosPorNivel = vals;
-        aplicarHorarioANivelEnAulas('Primaria', vals.Primaria);
-        saveState();
-        syncTableEvent('APPLY_HORARIO_NIVEL_AULAS', { nivel: 'Primaria', horario: vals.Primaria });
-        renderCurrentTab();
-        showToast(`Horario Primaria (${vals.Primaria.horaIngreso} - ${vals.Primaria.horaSalida}) asignado a aulas de Primaria.`);
-      });
-
-      const selSedeEl = document.getElementById('selHorarioSede');
-      if (selSedeEl) {
-        selSedeEl.addEventListener('change', e => {
+      const selSedeAulas = document.getElementById('selSedeAulasHorario');
+      if (selSedeAulas) {
+        selSedeAulas.addEventListener('change', e => {
           selectedSedeHorarioEdit = e.target.value;
-          selectedAulaHorarioId = null;
           renderCurrentTab();
         });
       }
 
-      const selAulaEl = document.getElementById('selAulaHorario');
-      if (selAulaEl) {
-        selAulaEl.addEventListener('change', e => {
-          selectedAulaHorarioId = e.target.value;
-          renderCurrentTab();
-        });
-      }
-
-      const btnCargarBaseNivelAula = document.getElementById('btnCargarBaseNivelAula');
-      if (btnCargarBaseNivelAula) {
-        btnCargarBaseNivelAula.addEventListener('click', () => {
-          const nivSel = document.getElementById('selNivelAulaHorario').value;
-          const hNiv = getHorarioPorNivel(nivSel);
-          document.getElementById('inpAulaHorarioIngreso').value = hNiv.horaIngreso;
-          document.getElementById('inpAulaHorarioSalida').value = hNiv.horaSalida;
-          showToast(`Cargado horario base de ${nivSel}: ${hNiv.horaIngreso} - ${hNiv.horaSalida}.`);
+      const selPlantilla = document.getElementById('selPlantillaHorarioAula');
+      const inpAsigIng = document.getElementById('inpAsigIngreso');
+      const inpAsigSal = document.getElementById('inpAsigSalida');
+      if (selPlantilla && inpAsigIng && inpAsigSal) {
+        selPlantilla.addEventListener('change', () => {
+          if (selPlantilla.value === 'Inicial') {
+            inpAsigIng.value = hInicial.horaIngreso;
+            inpAsigSal.value = hInicial.horaSalida;
+          } else if (selPlantilla.value === 'Primaria') {
+            inpAsigIng.value = hPrimaria.horaIngreso;
+            inpAsigSal.value = hPrimaria.horaSalida;
+          }
         });
       }
 
       document.getElementById('asignarHorarioAulaForm').addEventListener('submit', e => {
         e.preventDefault();
-        const idAula = document.getElementById('selAulaHorario').value;
-        if (!idAula) {
-          showToast('Seleccione un aula o cree una primero.');
+        const idAula = document.getElementById('selAulaAsignarHorario').value;
+        const plantilla = document.getElementById('selPlantillaHorarioAula').value;
+        const ing = document.getElementById('inpAsigIngreso').value;
+        const sal = document.getElementById('inpAsigSalida').value;
+        const aulaObj = appState.tbl_aulas_permanentes.find(a => a.idAula === idAula && a.codigoSede === sedeActivaCode);
+        if (!aulaObj) {
+          showToast('Seleccione un aula válida.');
           return;
         }
-        const au = appState.tbl_aulas_permanentes.find(x => x.idAula === idAula);
-        if (!au) return;
-
-        const nivel = document.getElementById('selNivelAulaHorario').value || 'Primaria';
-        const horaIngreso = document.getElementById('inpAulaHorarioIngreso').value;
-        const horaSalida = document.getElementById('inpAulaHorarioSalida').value;
-
-        au.nivel = nivel;
-        au.horaIngreso = horaIngreso;
-        au.horaSalida = horaSalida;
-        au.diasActivos = getHorarioPorNivel(nivel).diasActivos;
-        selectedAulaHorarioId = au.idAula;
-
-        saveState();
-        syncTableEvent('ASSIGN_HORARIO_AULA', { aula: au });
-        renderCurrentTab();
-        showToast(`Horario ${horaIngreso} - ${horaSalida} (${nivel}) asignado a ${au.nombreAula}.`);
-      });
-
-      document.getElementById('crearAulaConHorarioForm').addEventListener('submit', e => {
-        e.preventDefault();
-        const nombreAula = document.getElementById('inpNuevaAulaRapidaNombre').value.trim();
-        const nivel = document.getElementById('inpNuevaAulaRapidaNivel').value || 'Primaria';
-        if (!nombreAula) return;
-
-        const hNiv = getHorarioPorNivel(nivel);
-        const sCfg = getSedeConfig(selectedSedeHorarioEdit);
-        const nuevaAula = {
-          idAula: `AUL-${sCfg.codigoSede}-${Date.now().toString().slice(-4)}`,
-          codigoSede: sCfg.codigoSede,
-          nombreAula,
-          grado: sCfg.grados[0] || '',
-          nivel,
-          horaIngreso: hNiv.horaIngreso,
-          horaSalida: hNiv.horaSalida,
-          diasActivos: hNiv.diasActivos
-        };
-        appState.tbl_aulas_permanentes.push(nuevaAula);
-        selectedAulaHorarioId = nuevaAula.idAula;
-        saveState();
-        syncTableEvent('CREATE_AULA_WITH_HORARIO', { aula: nuevaAula });
-        renderCurrentTab();
-        showToast(`Aula "${nombreAula}" creada en ${sCfg.codigoSede} con horario ${nivel} (${hNiv.horaIngreso} - ${hNiv.horaSalida}).`);
-      });
-
-      container.querySelectorAll('[data-pick-aula-horario]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          selectedAulaHorarioId = btn.dataset.pickAulaHorario;
-          renderCurrentTab();
-        });
-      });
-
-      document.getElementById('horarioSedeForm').addEventListener('submit', e => {
-        e.preventDefault();
-        const code = selectedSedeHorarioEdit;
-        const s = getSedeConfig(code);
-        const inicio = document.getElementById('inpSedeHoraInicio').value;
-        const fin = document.getElementById('inpSedeHoraFin').value;
-        const dias = document.getElementById('inpSedeDiasActivos').value.trim() || 'Lunes a Viernes';
-
-        appState.horariosPorSede[code] = {
-          codigoSede: s.codigoSede,
-          nombreSede: s.nombreSede,
-          horaInicioSalida: inicio,
-          horaFinSalida: fin,
-          diasActivos: dias,
-          actualizadoEn: getTodayISO()
+        aulaObj.nivel = plantilla === 'Inicial' ? 'Inicial' : (plantilla === 'Primaria' ? 'Primaria' : (aulaObj.nivel || getNivelDeGrado(aulaObj.grado)));
+        aulaObj.horarioPersonalizado = {
+          horaIngreso: ing,
+          horaSalida: sal,
+          diasActivos: 'Lunes a Viernes'
         };
         saveState();
-        updateHeaderBadges();
-        syncTableEvent('UPDATE_HORARIO_SEDE', { horarioSede: appState.horariosPorSede[code] });
+        syncTableEvent('ASSIGN_HORARIO_AULA', { codigoSede: sedeActivaCode, aula: aulaObj });
         renderCurrentTab();
-        showToast(`Horario actualizado para ${s.nombreSede} (${inicio} - ${fin}).`);
+        showToast(`Horario ${ing} - ${sal} asignado a ${aulaObj.nombreAula}.`);
       });
 
-      document.getElementById('btnEliminarHorarioSedeActual').addEventListener('click', () => {
-        eliminarHorarioDeSede(selectedSedeHorarioEdit);
-      });
-
-      container.querySelectorAll('[data-edit-horario-sede]').forEach(btn => {
+      container.querySelectorAll('[data-quick-nivel-aula]').forEach(btn => {
         btn.addEventListener('click', () => {
-          selectedSedeHorarioEdit = btn.dataset.editHorarioSede;
-          selectedAulaHorarioId = null;
+          const idAula = btn.dataset.quickNivelAula;
+          const nivelElegido = btn.dataset.nivel;
+          const hn = getHorarioDeNivel(nivelElegido);
+          const aulaObj = appState.tbl_aulas_permanentes.find(a => a.idAula === idAula && a.codigoSede === sedeActivaCode);
+          if (!aulaObj) return;
+          aulaObj.nivel = nivelElegido;
+          aulaObj.horarioPersonalizado = {
+            horaIngreso: hn.horaIngreso,
+            horaSalida: hn.horaSalida,
+            diasActivos: hn.diasActivos || 'Lunes a Viernes'
+          };
+          saveState();
+          syncTableEvent('ASSIGN_HORARIO_AULA', { codigoSede: sedeActivaCode, aula: aulaObj });
           renderCurrentTab();
+          showToast(`Horario de ${nivelElegido} (${hn.horaIngreso} - ${hn.horaSalida}) asignado a ${aulaObj.nombreAula}.`);
         });
-      });
-
-      container.querySelectorAll('[data-del-horario-sede]').forEach(btn => {
-        btn.addEventListener('click', () => eliminarHorarioDeSede(btn.dataset.delHorarioSede));
       });
     }
   </script>
