@@ -565,9 +565,11 @@
     }
 
     function getConfiguredScriptUrl() {
+      if (APPS_SCRIPT_WEB_APP_URL && APPS_SCRIPT_WEB_APP_URL.trim()) {
+        return APPS_SCRIPT_WEB_APP_URL.trim();
+      }
       const customUrl = localStorage.getItem('aulasalida_custom_sync_url');
       if (customUrl && customUrl.trim()) return customUrl.trim();
-      if (APPS_SCRIPT_WEB_APP_URL && APPS_SCRIPT_WEB_APP_URL.trim()) return APPS_SCRIPT_WEB_APP_URL.trim();
       return '';
     }
 
@@ -690,26 +692,71 @@
       syncStatusText = 'Sincronizando...';
       updateHeaderBadges();
 
+      const hasAppsScript = endpoints.some(ep => ep.type === 'apps_script');
       for (const ep of endpoints) {
         try {
           if (ep.type === 'apps_script') {
             const scriptBody = JSON.stringify(Object.assign({
               action: actionName,
-              state: st
+              state: st,
+              _updatedAt: st._updatedAt
             }, extraPayload || {}));
-            await fetch(ep.pushUrl, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-              body: scriptBody
-            });
-            lastPushedSerialized = payloadStr;
-            remoteSyncSource = 'SHEETS';
-            lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-            syncStatusText = `Sheets OK (${lastSyncedAt})`;
-            updateHeaderBadges();
-            return true;
+
+            let verifiedRemote = false;
+            try {
+              const resp = await fetch(ep.pushUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: scriptBody
+              });
+              if (resp.ok) {
+                const txt = await resp.text();
+                try {
+                  const parsedResp = JSON.parse(txt);
+                  if (parsedResp && parsedResp.ok === false) {
+                    syncStatusText = `Error Script: ${parsedResp.error || 'revisar Code.gs'}`;
+                    updateHeaderBadges();
+                    return false;
+                  }
+                } catch (_) {}
+                verifiedRemote = true;
+              }
+            } catch (_) {
+              await fetch(ep.pushUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: scriptBody
+              });
+              await new Promise(r => setTimeout(r, 600));
+              try {
+                const checkRes = await fetch(`${ep.pullUrl}?_check=${Date.now()}`, { cache: 'no-store' });
+                if (checkRes.ok) {
+                  const checkTxt = await checkRes.text();
+                  const checkJson = JSON.parse(checkTxt);
+                  const remoteState = (checkJson && checkJson.state) ? checkJson.state : checkJson;
+                  if (remoteState && Number(remoteState._updatedAt || 0) >= Number(st._updatedAt || 0)) {
+                    verifiedRemote = true;
+                  }
+                }
+              } catch (_) {}
+            }
+
+            if (verifiedRemote) {
+              lastPushedSerialized = payloadStr;
+              remoteSyncSource = 'SHEETS';
+              lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+              syncStatusText = `Sheets Real OK (${lastSyncedAt})`;
+              updateHeaderBadges();
+              return true;
+            } else {
+              syncStatusText = 'Sin confirmación de Sheets (revisar acceso Web App)';
+              updateHeaderBadges();
+              return false;
+            }
           }
+
+          if (hasAppsScript) continue;
 
           const res = await fetch(ep.pushUrl, {
             method: ep.method || 'POST',
@@ -737,14 +784,41 @@
       activeSyncInFlight = true;
       const endpoints = getSyncEndpoints();
       try {
+        const hasAppsScriptPull = endpoints.some(ep => ep.type === 'apps_script');
         for (const ep of endpoints) {
+          if (hasAppsScriptPull && ep.type !== 'apps_script') continue;
           try {
             const sep = ep.pullUrl.includes('?') ? '&' : '?';
             const res = await fetch(`${ep.pullUrl}${sep}_t=${Date.now()}`, { cache: 'no-store' });
-            if (!res.ok) continue;
+            if (!res.ok) {
+              if (ep.type === 'apps_script') {
+                syncStatusText = `Sheets HTTP ${res.status}`;
+                updateHeaderBadges();
+              }
+              continue;
+            }
             const text = await res.text();
-            if (!text || !text.trim()) continue;
-            let remoteData = JSON.parse(text);
+            if (!text || !text.trim()) {
+              if (ep.type === 'apps_script') {
+                lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                syncStatusText = `Sheets vacío (${lastSyncedAt})`;
+                updateHeaderBadges();
+              }
+              continue;
+            }
+            let remoteData;
+            try {
+              remoteData = JSON.parse(text);
+            } catch (parseErr) {
+              syncStatusText = 'Script devolvió HTML (poner acceso: Cualquier persona)';
+              updateHeaderBadges();
+              continue;
+            }
+            if (remoteData && typeof remoteData === 'object' && remoteData.ok === false) {
+              syncStatusText = `Error Sheets: ${remoteData.error || 'revisar permisos'}`;
+              updateHeaderBadges();
+              continue;
+            }
             if (remoteData && typeof remoteData === 'object' && remoteData.ok === true && remoteData.state) {
               remoteData = remoteData.state;
             }
@@ -752,7 +826,14 @@
               try { remoteData = JSON.parse(remoteData.message); } catch (_) {}
             }
             const norm = normalizeSyncedState(remoteData, null);
-            if (!norm) continue;
+            if (!norm) {
+              if (ep.type === 'apps_script') {
+                lastSyncedAt = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+                syncStatusText = `Sheets sin snapshot (${lastSyncedAt})`;
+                updateHeaderBadges();
+              }
+              continue;
+            }
 
             remoteSyncSource = ep.type === 'apps_script' ? 'SHEETS' : ep.type.toUpperCase();
             const currentTs = Number((appState && appState._updatedAt) || 0);
@@ -766,7 +847,12 @@
             syncStatusText = `${remoteSyncSource} (${lastSyncedAt})`;
             updateHeaderBadges();
             return false;
-          } catch (_) {}
+          } catch (err) {
+            if (ep.type === 'apps_script') {
+              syncStatusText = 'Sheets sin acceso / revisar Web App';
+              updateHeaderBadges();
+            }
+          }
         }
         return false;
       } finally {
@@ -961,7 +1047,11 @@
       currentUser = acc;
       editingAulaId = null;
       startCloudSyncLoop();
-      pullStateFromCloud(false);
+      pullStateFromCloud(false).then(applied => {
+        if (!applied && getConfiguredScriptUrl()) {
+          pushStateToCloud(appState, 'INIT_SESSION');
+        }
+      });
       ensureDayRollover(appState);
       updateHeaderBadges();
       renderHeaderActionsForRole();
